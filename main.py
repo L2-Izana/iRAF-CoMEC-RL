@@ -9,4 +9,4 @@ class ToyIraFEngine:
 sim = CoMECSimulator(num_devices=50, num_tasks=2000)
 sim.install_iraf_engine(ToyIraFEngine())
 metrics = sim.run()
-# sim.metrics.plot_results()
+sim.metrics.plot_results()

@@ -3,10 +3,9 @@ import time
 import matplotlib.pyplot as plt
 
 class MetricsTracker:
-    def __init__(self):
+    def __init__(self, total_tasks):
         self.metrics = {
             'completed_tasks': 0,
-            'failed_tasks': 0,
             'total_latency': 0,
             'total_energy': 0,
             'time_points': [],
@@ -15,11 +14,11 @@ class MetricsTracker:
             'energy_per_task': [],
             'latency_per_task': [],
         }
+        self.total_tasks = total_tasks
 
     def reset(self):
         self.metrics = {
             'completed_tasks': 0,
-            'failed_tasks': 0,
             'total_latency': 0,
             'total_energy': 0,
             'time_points': [],
@@ -44,9 +43,6 @@ class MetricsTracker:
         self.metrics['latency_per_task'].append(latency)
         self.metrics['energy_per_task'].append(energy)
 
-    def record_task_failure(self):
-        self.metrics['failed_tasks'] += 1
-
     def get_average_metrics(self):
         c = self.metrics['completed_tasks']
         if c:
@@ -56,34 +52,36 @@ class MetricsTracker:
             }
         return {'avg_latency': 0, 'avg_energy': 0}
 
-    def plot_results(self, algo, num_devices, num_tasks, need_duration):
+    def plot_results(self):
         plt.figure(figsize=(12, 10))
         
         # Task completion plot
         plt.subplot(5, 1, 1)
-        plt.bar(['Done', 'Fail'],
-                [self.metrics['completed_tasks'], self.metrics['failed_tasks']])
-        plt.title(f"Task Success Rate: {self.metrics['completed_tasks']}/{self.metrics['failed_tasks']}")
+        plt.bar(['Done', 'Failed'],
+                [self.metrics['completed_tasks'], self.total_tasks - self.metrics['completed_tasks']])
+        plt.title(f"Task Success Rate: {self.metrics['completed_tasks']}/{self.total_tasks}")
         
         # Latency plot
+        avg_latency = self.metrics['total_latency'] / self.metrics['completed_tasks']
         plt.subplot(5, 1, 2)
         plt.plot(self.metrics['latency_per_task'])
-        plt.title(f"Latency Total:{self.metrics['total_latency']:.1f}ms")
+        plt.title(f"Latency Total:{self.metrics['total_latency']:.1f}ms\nAvg:{avg_latency:.1f}ms")
         
         # Energy plot
+        avg_energy = self.metrics['total_energy'] / self.metrics['completed_tasks']
         plt.subplot(5, 1, 3)
         plt.plot(self.metrics['energy_per_task'])
-        plt.title(f"Energy Total:{self.metrics['total_energy']:.3f}J")
+        plt.title(f"Energy Total:{self.metrics['total_energy']:.3f}J\nAvg:{avg_energy:.3f}J")
         
         # CPU utilization plot
         plt.subplot(5, 1, 4)
         plt.plot(self.metrics['edge_server_cpu_utilization'], label='CPU')
+        plt.title('CPU Utilization')
         
         # Bandwidth utilization plot
         plt.subplot(5, 1, 5)
         plt.plot(self.metrics['base_station_bandwidth_utilization'], label='BW')
-        plt.legend()
-        plt.title('Utilization')
+        plt.title('Bandwidth Utilization')
 
         plt.tight_layout()
         
@@ -92,5 +90,6 @@ class MetricsTracker:
             os.makedirs('result_plots')
             
         # Save plot
-        plt.savefig(f'result_plots/{algo}_results_{num_devices}_{num_tasks}_{need_duration}_{time.strftime("%Y%m%d_%H%M%S")}.png')
-        plt.close() 
+        plt.savefig(f'result_plots/{time.strftime("%Y%m%d_%H%M%S")}.png')
+        plt.show()
+        # plt.close() 
