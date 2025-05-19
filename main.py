@@ -1,3 +1,4 @@
+import csv
 import numpy as np
 from comec_simulator.core.simulator import CoMECSimulator
 from iraf_engine.iraf_engine import IraFEngine
@@ -30,9 +31,13 @@ from iraf_engine.iraf_engine import IraFEngine
 #     metrics = sim.run(residual=True, optimize_for='latency_energy')
 #     sim.metrics.plot_results(saved=True)
 
-sim = CoMECSimulator(num_devices=10, num_tasks=20, iterations=100)
+sim = CoMECSimulator(num_devices=10, num_tasks=20, iterations=11000)
 sim.install_iraf_engine(IraFEngine(algorithm='mcts'))
 metrics = sim.run(residual=True, optimize_for='latency_energy')
 best_action = sim.iraf_engine.get_best_action()
+action_probabilities = sim.iraf_engine.extract_action_probabilities()
 print(best_action)
-sim.metrics.plot_results(saved=True)
+print(action_probabilities)
+
+# Save
+np.save("action_probabilities.npy", action_probabilities)

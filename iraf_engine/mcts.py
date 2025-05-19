@@ -123,9 +123,36 @@ class MCTS:
     
     def get_best_action(self):
         best_action = []
-        while self.current_node.children:
-            best_child = max(self.current_node.children, key=lambda x: x.Q if x.N > 0 else -float('inf')) # Greedy selection
+        node = self.current_node
+        while node.children:
+            best_child = max(node.children, key=lambda x: x.Q if x.N > 0 else -float('inf')) # Greedy selection
             best_action.append(best_child.action[2])
-            self.current_node = best_child
+            node = best_child
         best_action = np.array(best_action).reshape(-1, 5).round(3)
         return best_action
+    
+    def extract_action_probabilities(self) -> np.ndarray:
+        """Extract action probabilities from tree statistics"""
+        π = np.zeros((20, self.num_subactions, max(self.bins_per_subaction_list)))
+        node = self.current_node
+        list_children = node.children
+        while list_children:
+            child = list_children.pop()
+            if child.action is not None:
+                t_idx, s_idx, val = child.action
+                if s_idx == 0:
+                    bin_id = int(round(val / (0.95 / (self.bins_per_subaction_list[0]-1))))
+                else:
+                    bin_id = int(round(val / (0.9 / (self.bins_per_subaction_list[s_idx]-1))))
+                bin_id = min(bin_id, self.bins_per_subaction_list[s_idx] - 1)
+                π[t_idx][s_idx][bin_id] += child.N
+            list_children.extend(child.children)
+                    
+        # Normalize
+        for t in range(20):
+            for s in range(self.num_subactions):
+                total = np.sum(π[t][s])
+                if total > 0:
+                    π[t][s] /= total
+    
+        return π

@@ -177,3 +177,5 @@ result_plots/
 comec_components.py
 comec_env_simulator.py
 *.txt
+*.npy
+*.csv

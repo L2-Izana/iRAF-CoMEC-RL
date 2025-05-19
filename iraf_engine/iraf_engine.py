@@ -35,3 +35,7 @@ class IraFEngine:
     def get_best_action(self):
         if self.algorithm == 'mcts':
             return self.mcts.get_best_action()
+    
+    def extract_action_probabilities(self):
+        if self.algorithm == 'mcts':
+            return self.mcts.extract_action_probabilities()
