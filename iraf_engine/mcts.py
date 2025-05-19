@@ -49,10 +49,90 @@ class MCTS:
         self.c = exploration_constant
         self.num_subactions = num_subactions
         self.bins_per_subaction_list = bins_per_subaction_list
-        self.root = Node()
+        self.root = Node(depth=0)
         self.current_node = self.root
-        self.bins = [np.linspace(0, 1, bins_per_subaction + 1)[1:].tolist() for bins_per_subaction in self.bins_per_subaction_list]
+        self.bins = [np.linspace(0, 1, bins_per_subaction + 2)[1:-1].tolist() for bins_per_subaction in self.bins_per_subaction_list]
         
+    
+    def backprop(self, reward: float):
+        print(f"Backpropping with reward: {reward}")
+        """Update node statistics upward through the tree"""
+        # node = self.current_node
+        while self.current_node.parent is not None:
+            self.current_node.N += 1
+            self.current_node.Q += reward
+            self.current_node = self.current_node.parent
+        self.current_node.N += 1
+        self.current_node.Q += reward
+        # self.current_node = self.root
+        # print(f"Done the backprop, check the update of the tree")
+        # for child in self.root.children:
+        #     print(f"Visits: {child.N}, Q: {child.Q}", end=", ")
+        # print()
+        
+    def best_child(self, node: Node) -> Node:
+        """Select the best child based on UCB score"""
+        def uct(child: Node):
+            if child.N == 0:
+                return float('inf')
+            # For negative rewards, higher (less negative) Q/N is better
+            exploitation = child.Q
+            
+            # Add exploration bonus
+            exploration = self.c * np.sqrt(np.log(node.N+1) / child.N)
+            
+            return exploitation + exploration
+        
+        def puct(child: AlphaZeroNode):
+            exploitation = child.Q
+            exploration = self.c * child.prior * np.sqrt(np.log(node.N+1)) / (1+ child.N)
+            return exploitation + exploration
+
+        # Select best child based on UCB
+        best_child = max(node.children, key=uct)
+        return best_child
+    
+    
+    
+    def get_ratios(self, env_resources) -> Tuple[float, float, float, float, float]:
+        """
+        Get the ratios for the task: So for each task other environment conditions, we c
+        Args:
+            env_resources: List[float]
+        Returns:
+            Tuple[float, float, float, float, float]
+        """
+        # input_tensor = self.create_normalize_input_tensor(task, bs, edge_servers)
+        # print(input_tensor)
+        # with torch.no_grad():
+        #     priors = self.model(input_tensor)
+        # # priors_arr = priors.numpy().flatten()
+        # ratios = np.ones(5)
+        # # At this point, use this priors, need to change to selection (best child) algorithm
+        # for i, prior in enumerate(priors):
+        #     max_bin = self.bins[i][torch.argmax(prior)]
+        #     # print(f"max_bin: {max_bin}")
+        #     ratios[i] = max_bin
+        # return tuple(ratios)
+        ratios = np.ones(5)
+        for i in range(5):
+            # Expand if not expanded
+            if not self.current_node.expanded:
+                num_bins = self.bins_per_subaction_list[i]
+                for j in range(num_bins):
+                    depth = self.current_node.depth + 1
+                    task_idx, subaction_idx = self.current_node.get_node_index()
+                    child = Node(action=(task_idx, subaction_idx, self.bins[i][j]), depth=depth, parent=self.current_node)
+                    self.current_node.children.append(child)
+                self.current_node.expanded = True
+            
+            # Select
+            max_child = self.best_child(self.current_node)
+            ratios[i] = max_child.action[2]
+            self.current_node = max_child
+        assert np.any(ratios >= 1.0) == False and np.any(ratios < 0.0) == False, f"Ratios are out of range, {ratios}"
+        return tuple(ratios)
+    
     # def expand(self, node: Node):
     #     """Expand a node by adding all possible children"""
     #     task_idx, subaction_idx = node.get_node_index()
@@ -85,40 +165,7 @@ class MCTS:
     #         node.children.append(child)
             
     #     node.expanded = True
-    
-    def backprop(self, reward: float):
-        print(f"Backpropping with reward: {reward}")
-        """Update node statistics upward through the tree"""
-        print(f"Current node cc: {self.current_node}")
-        while self.current_node.parent is not None:
-            self.current_node.N += 1
-            self.current_node.Q += reward
-            print(f"Current node: {self.current_node}")
-            self.current_node = self.current_node.parent
-        self.current_node = self.root
-        
-    def best_child(self, node: Node) -> Node:
-        """Select the best child based on UCB score"""
-        def uct(child: Node):
-            if child.N == 0:
-                return float('inf')
-            # For negative rewards, higher (less negative) Q/N is better
-            exploitation = child.Q
-            
-            # Add exploration bonus
-            exploration = self.c * np.sqrt(np.log(node.N) / child.N)
-            
-            return exploitation + exploration
-        
-        def puct(child: AlphaZeroNode):
-            exploitation = child.Q
-            exploration = self.c * child.prior * np.sqrt(np.log(node.N)) / (1+ child.N)
-            return exploitation + exploration
 
-        # Select best child based on UCB
-        best_child = max(node.children, key=uct)
-        return best_child
-    
     def tree_policy(self, root: Node, K: int):
         """Traverse the tree to find a leaf node to evaluate"""
         node = root
@@ -139,7 +186,7 @@ class MCTS:
         # rewards = [env.step(action_matrix[i], tasks[i]) for i in range(len(tasks))]
         # total_reward = sum(rewards)
         # return node, total_reward
-    
+
     # def get_full_action_matrix(self, node: Node, K: int) -> np.ndarray:
     #     """Reconstruct the full action matrix from a node and its ancestors"""
     #     A = np.ones((K, self.num_subactions), dtype=np.float32)
@@ -233,41 +280,3 @@ class MCTS:
     #     es_cpu_arr = np.array([es_e.available_cpu / EDGE_SERVER_CPU_CAPACITY for es_e in edge_servers])
     #     input_tensor = np.concatenate((task_properties_arr, bs_bw_arr, es_cpu_arr))
     #     return input_tensor
-    
-    def get_ratios(self, env_resources) -> Tuple[float, float, float, float, float]:
-        """
-        Get the ratios for the task: So for each task other environment conditions, we c
-        Args:
-            env_resources: List[float]
-        Returns:
-            Tuple[float, float, float, float, float]
-        """
-        # input_tensor = self.create_normalize_input_tensor(task, bs, edge_servers)
-        # print(input_tensor)
-        # with torch.no_grad():
-        #     priors = self.model(input_tensor)
-        # # priors_arr = priors.numpy().flatten()
-        # ratios = np.ones(5)
-        # # At this point, use this priors, need to change to selection (best child) algorithm
-        # for i, prior in enumerate(priors):
-        #     max_bin = self.bins[i][torch.argmax(prior)]
-        #     # print(f"max_bin: {max_bin}")
-        #     ratios[i] = max_bin
-        # return tuple(ratios)
-        ratios = np.ones(5)
-        for i in range(5):
-            # Expand if not expanded
-            if not self.current_node.expanded:
-                num_bins = self.bins_per_subaction_list[i]
-                for j in range(num_bins):
-                    child = Node(action=(i, j, self.bins[i][j]), depth=self.current_node.depth + 1, parent=self.current_node)
-                    self.current_node.children.append(child)
-                self.current_node.expanded = True
-            
-            # Select
-            max_child = self.best_child(self.current_node)
-            ratios[i] = max_child.action[2]
-            self.current_node = max_child
-        assert np.any(ratios >= 1.0) == False and np.any(ratios < 0.0) == False, f"Ratios are out of range, {ratios}"
-        return tuple(ratios)
-    

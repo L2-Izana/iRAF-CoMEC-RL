@@ -14,7 +14,7 @@ class CoMECSimulator:
     """
     def __init__(
         self,
-        need_duration=True,
+        need_duration=False,
         iterations=1,
         max_time=10000,
         retry_interval=10,
@@ -42,7 +42,7 @@ class CoMECSimulator:
             print(f"Running iteration {_}")
             # Restart environment and metrics
             self.env.reset()
-            self.metrics.reset()
+            # self.metrics.reset()
 
             # Main simulation loop
             while True:
@@ -60,7 +60,6 @@ class CoMECSimulator:
                     task = event['args'][0]
                     env_resources = self.env.get_resources(task)
                     alphas = self.iraf_engine.get_ratios(env_resources)
-                    print(f"alphas: {alphas}")
                     step_args = ("_handle_request", (task, alphas, residual))
                 elif event['func_name'] == '_handle_completion':
                     total_latency = event['args'][0]['total_latency']
@@ -85,7 +84,7 @@ class CoMECSimulator:
             
             # Note: task completions record latency/energy via callbacks
             all_metrics.append(average_metrics)
-            time.sleep(1)
+            # time.sleep(1)
         average_latency = [a['avg_latency'] for a in all_metrics]
         plt.plot(average_latency)
         plt.show()

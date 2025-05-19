@@ -51,7 +51,7 @@ class CoMECEnvironment:
             bs.reset()
         for es in self.edge_servers:
             es.reset()
-        # schedule task arrivals
+        # # schedule task arrivals
         self._schedule_arrivals()
 
     def _schedule_arrivals(self):
