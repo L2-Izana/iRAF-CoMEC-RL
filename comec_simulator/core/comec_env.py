@@ -7,6 +7,10 @@ import numpy as np
 from ..core.components import BaseStation, EdgeServer, MobileDevice, Task
 from ..core.constants import CHANNEL_NOISE_VARIANCE, CHIP_COEFFICIENT
 
+random.seed(187)
+np.random.seed(187)
+
+
 class CoMECEnvironment:
     """
     A standalone environment for CoMEC simulation:
@@ -31,7 +35,8 @@ class CoMECEnvironment:
         self.base_stations = self._build_base_stations(num_bs)
         self.mobile_devices = [MobileDevice(base_station=self.base_stations[0])
                                for _ in range(num_devices)]
-
+        self.generated_tasks = []
+        
     def _build_base_stations(self, num_bs):
         per_bs = max(1, len(self.edge_servers) // num_bs)
         bs_list = []
@@ -41,25 +46,29 @@ class CoMECEnvironment:
             bs_list.append(BaseStation(self.edge_servers[start:end]))
         return bs_list
 
-    def reset(self):
+    def reset(self, reset_tasks=True):
         """Reset environment to initial state for a new episode"""
         self.time = 0
         self.event_queue.clear()
-        self.generated_tasks = []
         # reset resources
         for bs in self.base_stations:
             bs.reset()
         for es in self.edge_servers:
             es.reset()
-        # # schedule task arrivals
-        self._schedule_arrivals()
+        # schedule task arrivals (keep tasks persistent)
+        self._schedule_arrivals(reset_tasks=reset_tasks)
 
-    def _schedule_arrivals(self):
-        for _ in range(self.num_tasks):
-            dev = random.choice(self.mobile_devices)
-            arrival = random.uniform(0, self.arrival_window)
-            task = dev.generate_task(arrival)
-            self._enqueue(arrival, '_handle_request', task)
+    def _schedule_arrivals(self, reset_tasks=True):
+        if reset_tasks:
+            for _ in range(self.num_tasks):
+                dev = random.choice(self.mobile_devices)
+                arrival = random.uniform(0, self.arrival_window)
+                task = dev.generate_task(arrival)
+                self._enqueue(arrival, '_handle_request', task)
+                self.generated_tasks.append(task)
+        else:
+            for generated_task in self.generated_tasks:
+                self._enqueue(generated_task.arrival_time, '_handle_request', generated_task)
 
     def _enqueue(self, t, func_name, *args):
         heapq.heappush(self.event_queue, (t, next(self.counter), func_name, args))
@@ -146,8 +155,6 @@ class CoMECEnvironment:
 
         total_latency = max(t_local, t_tx, t_edge, t_tx + t_collab)
         total_energy = E_local + E_tx
-        # print(f"bw_req: {bw_req}, p_cpu: {p_cpu}, c_cpu: {c_cpu}, total_latency: {total_latency}, total_energy: {total_energy}")
-        # time.sleep(1)
         return {
             'task': task,
             'bs': bs,

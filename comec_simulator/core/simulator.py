@@ -1,10 +1,12 @@
-import itertools
-import heapq
+import random
 import time
-
 from matplotlib import pyplot as plt
+import numpy as np
 from ..core.comec_env import CoMECEnvironment
 from ..visualization.metrics import MetricsTracker
+
+random.seed(187)
+np.random.seed(187)
 
 class CoMECSimulator:
     """
@@ -38,10 +40,12 @@ class CoMECSimulator:
     def run(self, residual=False, optimize_for='latency'):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
+        self.env.reset(reset_tasks=True)
         for _ in range(self.iterations):
-            print(f"Running iteration {_}")
+            if _ % 1000 == 0:
+                print(f"Running iteration {_}")
             # Restart environment and metrics
-            self.env.reset()
+            self.env.reset(reset_tasks=False)
             self.metrics.reset()
 
             # Main simulation loop
@@ -85,40 +89,15 @@ class CoMECSimulator:
             # Note: task completions record latency/energy via callbacks
             all_metrics.append(average_metrics)
             # time.sleep(1)
-        # average_latency = [a['avg_latency'] for a in all_metrics]
-        # plt.plot(average_latency)
-        # plt.show()
+        if optimize_for == 'latency':
+            metrics = [metric['avg_latency'] for metric in all_metrics]
+            
+        elif optimize_for == 'energy':
+            metrics = [metric['avg_energy'] for metric in all_metrics]
+        elif optimize_for == 'latency_energy':
+            metrics = [metric['avg_latency'] + metric['avg_energy'] for metric in all_metrics]
+        else:
+            raise ValueError(f"Invalid optimize_for: {optimize_for}")
+        with open(f'{optimize_for}_metrics{time.time()}.txt', 'w') as f:
+            np.savetxt(f, metrics)
         return all_metrics
-
-    def run_mcts(self, iterations=1000, optimize_for='latency'):
-        """Run with MCTS optimization, backing up rewards each episode."""
-        if not self.iraf_engine:
-            raise ValueError("No MCTS engine installed.")
-
-        results = []
-        for _ in range(iterations):
-            self.env.reset()
-            self.metrics.reset()
-
-            # Simulate one episode
-            while True:
-                if self.need_duration and self.env.event_queue and self.env.event_queue[0][0] > self.max_time:
-                    break
-                if not self.env.step():
-                    break
-                # MCTS engine provides ratios from task context
-                # engine should be called inside allocate_resources via environment
-
-            # Determine reward
-            completed = self.metrics.completed_tasks
-            failed = self.env.num_tasks - completed
-            if failed > 0:
-                penalty = -1000 - self.metrics.total_latency
-                self.iraf_engine.backup(penalty)
-            else:
-                reward = -self.metrics.total_latency if optimize_for == 'latency' else -self.metrics.total_energy
-                self.iraf_engine.backup(reward)
-                results.append(self.metrics.get_average_metrics())
-
-        return results
-
