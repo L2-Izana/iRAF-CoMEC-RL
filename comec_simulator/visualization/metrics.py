@@ -2,6 +2,27 @@ import os
 import time
 import matplotlib.pyplot as plt
 
+class IterationMetrics:
+    def __init__(self, total_tasks):
+        self.metrics = {
+            'completed_tasks': 0,
+            'total_latency': 0,
+            'total_energy': 0,
+            'time_points': [],
+            'edge_server_cpu_utilization': [],
+            'base_station_bandwidth_utilization': [],
+            'energy_per_task': [],
+            'latency_per_task': [],
+        }
+        self.total_tasks = total_tasks
+    
+    def reset(self):
+        self.metrics = {
+            'completed_tasks': 0,
+            'total_latency': 0,
+            'total_energy': 0,
+        }       
+
 class MetricsTracker:
     def __init__(self, total_tasks):
         self.metrics = {

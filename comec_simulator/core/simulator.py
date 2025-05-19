@@ -35,14 +35,14 @@ class CoMECSimulator:
     def install_iraf_engine(self, engine):
         self.iraf_engine = engine
 
-    def run(self, residual=False):
+    def run(self, residual=False, optimize_for='latency'):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         for _ in range(self.iterations):
             print(f"Running iteration {_}")
             # Restart environment and metrics
             self.env.reset()
-            # self.metrics.reset()
+            self.metrics.reset()
 
             # Main simulation loop
             while True:
@@ -80,14 +80,14 @@ class CoMECSimulator:
 
             # After run, backprop the tree and collect final data
             average_metrics = self.metrics.get_average_metrics()
-            self.iraf_engine.backprop(average_metrics, optimize_for='latency')
+            self.iraf_engine.backprop(average_metrics, optimize_for=optimize_for)
             
             # Note: task completions record latency/energy via callbacks
             all_metrics.append(average_metrics)
             # time.sleep(1)
-        average_latency = [a['avg_latency'] for a in all_metrics]
-        plt.plot(average_latency)
-        plt.show()
+        # average_latency = [a['avg_latency'] for a in all_metrics]
+        # plt.plot(average_latency)
+        # plt.show()
         return all_metrics
 
     def run_mcts(self, iterations=1000, optimize_for='latency'):

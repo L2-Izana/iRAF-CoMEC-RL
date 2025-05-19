@@ -1,3 +1,4 @@
+import random
 from typing import List, Optional, Tuple
 
 
@@ -73,13 +74,11 @@ class MCTS:
     def best_child(self, node: Node) -> Node:
         """Select the best child based on UCB score"""
         def uct(child: Node):
-            if child.N == 0:
-                return float('inf')
             # For negative rewards, higher (less negative) Q/N is better
             exploitation = child.Q
             
             # Add exploration bonus
-            exploration = self.c * np.sqrt(np.log(node.N+1) / child.N)
+            exploration = self.c * np.sqrt(np.log(node.N+1) / (1+child.N))
             
             return exploitation + exploration
         
@@ -89,8 +88,11 @@ class MCTS:
             return exploitation + exploration
 
         # Select best child based on UCB
-        best_child = max(node.children, key=uct)
-        return best_child
+        scores = [uct(child) for child in node.children]
+        max_score = max(scores)
+        best_indices = [i for i, score in enumerate(scores) if score == max_score]
+        chosen_index = random.choice(best_indices)
+        return node.children[chosen_index]
     
     
     
