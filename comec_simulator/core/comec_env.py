@@ -1,6 +1,7 @@
 import heapq
 import itertools
 import random
+import time
 import numpy as np
 
 from ..core.components import BaseStation, EdgeServer, MobileDevice, Task
@@ -87,8 +88,8 @@ class CoMECEnvironment:
             'task': task,
         }
 
-    def _handle_request(self, task, alphas):
-        alloc = self.allocate_resources(task, alphas)
+    def _handle_request(self, task, alphas, residual=False):
+        alloc = self.allocate_resources(task, alphas, residual)
         if not alloc:
             self._enqueue(self.time + self.retry_interval, '_handle_request', task)
             return
@@ -102,7 +103,7 @@ class CoMECEnvironment:
             alloc['collab'].release_cpu(alloc['c_cpu'])
         # user can collect latency and energy here
 
-    def allocate_resources(self, task, alphas):
+    def allocate_resources(self, task, alphas, residual=False):
         """
         Compute resource reservation, latency, and energy for a given task.
         alphas: tuple of (alpha_B, alpha_u2e, alpha_e2ehat, alpha_e, alpha_ehat)
@@ -113,7 +114,7 @@ class CoMECEnvironment:
 
         # 1) bandwidth reservation
         bs = task.bs
-        bw_req = bs.total_bandwidth * alpha_B
+        bw_req = alpha_B * (bs.total_bandwidth if not residual else bs.available_bandwidth)
         if not bs.allocate_bandwidth(bw_req):
             return None
 
@@ -122,8 +123,8 @@ class CoMECEnvironment:
         others = [s for s in self.edge_servers if s is not primary]
         collab = max(others, key=lambda s: s.available_cpu) if others else None
 
-        p_cpu = primary.cpu_capacity * alpha_e
-        c_cpu = collab.cpu_capacity * alpha_ehat if collab else 0
+        p_cpu = alpha_e * (primary.cpu_capacity if not residual else primary.available_cpu)
+        c_cpu = alpha_ehat * (collab.cpu_capacity if collab else 0)
         if p_cpu <= 0 or not primary.allocate_cpu(p_cpu):
             bs.release_bandwidth(bw_req)
             return None
@@ -145,7 +146,8 @@ class CoMECEnvironment:
 
         total_latency = max(t_local, t_tx, t_edge, t_tx + t_collab)
         total_energy = E_local + E_tx
-
+        # print(f"bw_req: {bw_req}, p_cpu: {p_cpu}, c_cpu: {c_cpu}, total_latency: {total_latency}, total_energy: {total_energy}")
+        # time.sleep(1)
         return {
             'task': task,
             'bs': bs,
@@ -157,11 +159,13 @@ class CoMECEnvironment:
             'total_latency': total_latency,
             'total_energy': total_energy,
         }
+        
 
-    def run(self, max_time=None):
-        """Run until no events left or until max_time is reached"""
-        while self.event_queue:
-            if max_time and self.event_queue[0][0] > max_time:
-                break
-            self.step()
-        # return final statistics collected externally
+
+    # def run(self, max_time=None):
+    #     """Run until no events left or until max_time is reached"""
+    #     while self.event_queue:
+    #         if max_time and self.event_queue[0][0] > max_time:
+    #             break
+    #         self.step()
+    #     # return final statistics collected externally

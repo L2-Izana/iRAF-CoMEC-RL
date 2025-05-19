@@ -1,5 +1,8 @@
 import itertools
 import heapq
+import time
+
+from matplotlib import pyplot as plt
 from ..core.comec_env import CoMECEnvironment
 from ..visualization.metrics import MetricsTracker
 
@@ -32,10 +35,11 @@ class CoMECSimulator:
     def install_iraf_engine(self, engine):
         self.iraf_engine = engine
 
-    def run(self):
+    def run(self, residual=False):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         for _ in range(self.iterations):
+            print(f"Running iteration {_}")
             # Restart environment and metrics
             self.env.reset()
             self.metrics.reset()
@@ -50,11 +54,14 @@ class CoMECSimulator:
                 #     break
                 event = self.env.pop_event()
                 step_args = None
+                if event is None:
+                    break
                 if event['func_name'] == '_handle_request':
                     task = event['args'][0]
                     env_resources = self.env.get_resources(task)
                     alphas = self.iraf_engine.get_ratios(env_resources)
-                    step_args = ("_handle_request", (task, alphas))
+                    print(f"alphas: {alphas}")
+                    step_args = ("_handle_request", (task, alphas, residual))
                 elif event['func_name'] == '_handle_completion':
                     total_latency = event['args'][0]['total_latency']
                     total_energy = event['args'][0]['total_energy']
@@ -72,10 +79,16 @@ class CoMECSimulator:
                     self.env.base_stations
                 )
 
-            # After run, collect final data
+            # After run, backprop the tree and collect final data
+            average_metrics = self.metrics.get_average_metrics()
+            self.iraf_engine.backprop(average_metrics, optimize_for='latency')
+            
             # Note: task completions record latency/energy via callbacks
-            all_metrics.append(self.metrics.get_average_metrics())
-
+            all_metrics.append(average_metrics)
+            time.sleep(1)
+        average_latency = [a['avg_latency'] for a in all_metrics]
+        plt.plot(average_latency)
+        plt.show()
         return all_metrics
 
     def run_mcts(self, iterations=1000, optimize_for='latency'):

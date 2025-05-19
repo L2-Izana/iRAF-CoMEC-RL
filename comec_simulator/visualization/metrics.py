@@ -52,7 +52,7 @@ class MetricsTracker:
             }
         return {'avg_latency': 0, 'avg_energy': 0}
 
-    def plot_results(self):
+    def plot_results(self, saved=False):
         plt.figure(figsize=(12, 10))
         
         # Task completion plot
@@ -90,6 +90,7 @@ class MetricsTracker:
             os.makedirs('result_plots')
             
         # Save plot
-        plt.savefig(f'result_plots/{time.strftime("%Y%m%d_%H%M%S")}.png')
-        plt.show()
-        # plt.close() 
+        if saved:
+            plt.savefig(f'result_plots/{time.strftime("%Y%m%d_%H%M%S")}.png')
+        else:
+            plt.show()
