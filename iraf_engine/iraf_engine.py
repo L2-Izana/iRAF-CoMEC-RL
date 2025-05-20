@@ -3,8 +3,8 @@ import numpy as np
 
 from iraf_engine.mcts import MCTS
 
-random.seed(187)
-np.random.seed(187)
+# random.seed(187)
+# np.random.seed(187)
 
 class IraFEngine:
     def __init__(self, algorithm: str = 'random'):

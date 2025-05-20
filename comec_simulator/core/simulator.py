@@ -5,8 +5,8 @@ import numpy as np
 from ..core.comec_env import CoMECEnvironment
 from ..visualization.metrics import MetricsTracker
 
-random.seed(187)
-np.random.seed(187)
+# random.seed(187)
+# np.random.seed(187)
 
 class CoMECSimulator:
     """
@@ -37,7 +37,7 @@ class CoMECSimulator:
     def install_iraf_engine(self, engine):
         self.iraf_engine = engine
 
-    def run(self, residual=False, optimize_for='latency'):
+    def run(self, residual=True, optimize_for='latency'):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         self.env.reset(reset_tasks=True)
@@ -101,3 +101,37 @@ class CoMECSimulator:
         with open(f'{optimize_for}_metrics{time.time()}.txt', 'w') as f:
             np.savetxt(f, metrics)
         return all_metrics
+    
+    def run_with_best_action(self, best_action, residual=True, optimize_for='latency'):
+        """Final simulation run for task and env condition recording"""
+        # Restart environment and metrics
+        self.env.reset(reset_tasks=False)
+        idx = 0
+        env_resources_record = []
+        # Main simulation loop
+        while True:
+            # If we've exceeded time, stop
+            if self.need_duration and self.env.event_queue and self.env.event_queue[0][0] > self.max_time:
+                break
+
+            event = self.env.pop_event()
+            step_args = None
+            if event is None:
+                break
+            if event['func_name'] == '_handle_request':
+                task = event['args'][0]
+                env_resources = self.env.get_resources_dnn(task)
+                env_resources_record.append(env_resources)
+                if idx < len(best_action):
+                    alphas = best_action[idx]
+                    step_args = ("_handle_request", (task, alphas, residual))
+                    idx += 1
+                else:
+                    print(task.arrival_time)
+            elif event['func_name'] == '_handle_completion':
+                step_args = ("_handle_completion", event['args'])
+
+            if step_args:
+                self.env.step(step_args)
+
+        return np.array(env_resources_record)

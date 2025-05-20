@@ -1,15 +1,15 @@
 import random
 from typing import List, Optional, Tuple
 
-
+from comec_simulator.core.constants import NUM_TASKS
 from typing import Optional, Tuple, List
 
 import numpy as np
 
 from comec_simulator.core.components import BaseStation, EdgeServer, Task
 
-random.seed(187)
-np.random.seed(187)
+# random.seed(187)
+# np.random.seed(187)
 
 class Node:
     def __init__(self, action: Optional[Tuple[int, int, float]] = None, depth: int = 0, num_subactions: int = 5, parent = None):
@@ -133,7 +133,7 @@ class MCTS:
     
     def extract_action_probabilities(self) -> np.ndarray:
         """Extract action probabilities from tree statistics"""
-        π = np.zeros((20, self.num_subactions, max(self.bins_per_subaction_list)))
+        π = np.zeros((NUM_TASKS, self.num_subactions, max(self.bins_per_subaction_list)))
         node = self.current_node
         list_children = node.children
         while list_children:
@@ -145,7 +145,10 @@ class MCTS:
                 else:
                     bin_id = int(round(val / (0.9 / (self.bins_per_subaction_list[s_idx]-1))))
                 bin_id = min(bin_id, self.bins_per_subaction_list[s_idx] - 1)
-                π[t_idx][s_idx][bin_id] += child.N
+                if t_idx < NUM_TASKS:
+                    π[t_idx][s_idx][bin_id] += child.N
+                else:
+                    print(f"t_idx: {t_idx}, s_idx: {s_idx}, bin_id: {bin_id}")
             list_children.extend(child.children)
                     
         # Normalize

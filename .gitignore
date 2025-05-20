@@ -179,3 +179,11 @@ comec_env_simulator.py
 *.txt
 *.npy
 *.csv
+pi_dataset/
+pi_dataset_small/
+*.png
+*.npy
+*.csv
+*.txt
+*.pt
+*.pth

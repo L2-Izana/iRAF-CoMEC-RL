@@ -1,3 +1,10 @@
+# Environment parameters
+NUM_EDGE_SERVERS = 4
+NUM_BS = 1
+NUM_TASKS = 20
+NUM_DEVICES = 10
+ITERATIONS = 11000
+
 # Physical constants
 CHIP_COEFFICIENT = 1e-26
 CHANNEL_NOISE_VARIANCE = 1e-5

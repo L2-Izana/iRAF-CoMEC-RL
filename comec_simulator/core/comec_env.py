@@ -5,10 +5,10 @@ import time
 import numpy as np
 
 from ..core.components import BaseStation, EdgeServer, MobileDevice, Task
-from ..core.constants import CHANNEL_NOISE_VARIANCE, CHIP_COEFFICIENT
+from ..core.constants import *
 
-random.seed(187)
-np.random.seed(187)
+# random.seed(187)
+# np.random.seed(187)
 
 
 class CoMECEnvironment:
@@ -19,7 +19,7 @@ class CoMECEnvironment:
     - Computes resource allocation, latency, and energy
     """
     def __init__(self, num_devices=20, num_tasks=50, arrival_window=10000,
-                 num_edge_servers=12, num_bs=1, retry_interval=10):
+                 num_edge_servers=NUM_EDGE_SERVERS, num_bs=NUM_BS, retry_interval=10):
         self.num_devices = num_devices
         self.num_tasks = num_tasks
         self.arrival_window = arrival_window
@@ -97,9 +97,18 @@ class CoMECEnvironment:
             'task': task,
         }
 
-    def _handle_request(self, task, alphas, residual=False):
+    def get_resources_dnn(self, task):
+        bs = np.array([task.bs.available_bandwidth / task.bs.total_bandwidth])
+        es = np.array([es.available_cpu / es.cpu_capacity for es in self.edge_servers])
+        task_props = task.get_properties_dnn()
+        resources_dnn = np.concatenate([bs, es, task_props])
+        return resources_dnn
+        
+    def _handle_request(self, task, alphas, residual=True):
         alloc = self.allocate_resources(task, alphas, residual)
         if not alloc:
+            print(f"Failed to allocate resources for task {task.task_id}")
+            time.sleep(10)
             self._enqueue(self.time + self.retry_interval, '_handle_request', task)
             return
         # schedule completion
@@ -112,7 +121,7 @@ class CoMECEnvironment:
             alloc['collab'].release_cpu(alloc['c_cpu'])
         # user can collect latency and energy here
 
-    def allocate_resources(self, task, alphas, residual=False):
+    def allocate_resources(self, task, alphas, residual=True):
         """
         Compute resource reservation, latency, and energy for a given task.
         alphas: tuple of (alpha_B, alpha_u2e, alpha_e2ehat, alpha_e, alpha_ehat)
@@ -125,6 +134,8 @@ class CoMECEnvironment:
         bs = task.bs
         bw_req = alpha_B * (bs.total_bandwidth if not residual else bs.available_bandwidth)
         if not bs.allocate_bandwidth(bw_req):
+            print(f"Failed to allocate bandwidth for task {task.task_id}")
+            time.sleep(10)
             return None
 
         # 2) CPU reservation
@@ -133,11 +144,15 @@ class CoMECEnvironment:
         collab = max(others, key=lambda s: s.available_cpu) if others else None
 
         p_cpu = alpha_e * (primary.cpu_capacity if not residual else primary.available_cpu)
-        c_cpu = alpha_ehat * (collab.cpu_capacity if collab else 0)
+        c_cpu = alpha_ehat * (collab.available_cpu if collab else 0)
         if p_cpu <= 0 or not primary.allocate_cpu(p_cpu):
+            print(f"Failed to allocate CPU of primary edge server for task {task.task_id}")
+            time.sleep(10)
             bs.release_bandwidth(bw_req)
             return None
         if c_cpu and collab and not collab.allocate_cpu(c_cpu):
+            print(f"Failed to allocate CPU of collab edge server for task {task.task_id}")
+            time.sleep(10)
             primary.release_cpu(p_cpu)
             bs.release_bandwidth(bw_req)
             return None
@@ -167,12 +182,4 @@ class CoMECEnvironment:
             'total_energy': total_energy,
         }
         
-
-
-    # def run(self, max_time=None):
-    #     """Run until no events left or until max_time is reached"""
-    #     while self.event_queue:
-    #         if max_time and self.event_queue[0][0] > max_time:
-    #             break
-    #         self.step()
-    #     # return final statistics collected externally
+        
