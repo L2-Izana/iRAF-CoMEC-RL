@@ -1,15 +1,14 @@
-import random
 from typing import List, Optional, Tuple
 
-from comec_simulator.core.constants import NUM_TASKS
+import torch
+
 from typing import Optional, Tuple, List
 
 import numpy as np
-
+import torch.nn as nn
 from comec_simulator.core.components import BaseStation, EdgeServer, Task
-
-# random.seed(187)
-# np.random.seed(187)
+from iraf_engine.dnn import IRafMultiTaskDNN
+import random
 
 class Node:
     def __init__(self, action: Optional[Tuple[int, int, float]] = None, depth: int = 0, num_subactions: int = 5, parent = None):
@@ -36,10 +35,11 @@ class Node:
         return f"[ClassicNode] depth={self.depth}, action={self.action}, Q={self.Q:.3f}, N={self.N}"
 
 class AlphaZeroNode(Node):
-    def __init__(self, action: Optional[Tuple[int, int, float]] = None, prior: float = 0.0, depth: int = 0, num_subactions: int = 5):
-        super().__init__(action, depth, num_subactions)
+    def __init__(self, action: Optional[Tuple[int, int, float]] = None, prior: float = 0.0, depth: int = 0, num_subactions: int = 5, parent = None, task_dnn_output=None):
+        super().__init__(action, depth, num_subactions, parent)
         self.prior = prior  # Prior from policy network
         self.value_sum = 0.0  # Sum of NN values for average estimation
+        self.task_dnn_output = task_dnn_output # A helper storage of DNN output for each task, used to solve the bug where for retravesal, it explores new subactions but we only get DNN output for the original subaction
 
     def get_mean_value(self) -> float:
         return self.value_sum / self.N if self.N > 0 else 0.0
@@ -48,12 +48,21 @@ class AlphaZeroNode(Node):
         return f"[AlphaZeroNode] depth={self.depth}, action={self.action}, prior={self.prior:.3f}, Q={self.Q:.3f}, N={self.N}"
 
 class MCTS:
-    def __init__(self, exploration_constant=0.8, num_subactions: int = 5, bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10]):
-        # self.model = model
+    def __init__(self, input_dim, exploration_constant=0.8, num_subactions: int = 5, bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10], use_dnn: bool = False):
         self.c = exploration_constant
         self.num_subactions = num_subactions
         self.bins_per_subaction_list = bins_per_subaction_list
-        self.root = Node(depth=0)
+        self.use_dnn = use_dnn
+        self.total_nodes = 1  # Start with 1 for root node
+        print(f"Using DNN: {use_dnn}")
+        if use_dnn:
+            print("Loading DNN model")
+            self.model = IRafMultiTaskDNN(input_dim=input_dim, head_dims=[20, 10, 10, 10, 10])
+            self.model.load_state_dict(torch.load("D:\\Research\\IoT\\iRAF-CoMEC-RL\\trained_iraf_policy_small.pt", weights_only=True))
+            self.root = AlphaZeroNode(depth=0)
+        else:
+            self.model = None
+            self.root = Node(depth=0)
         self.current_node = self.root
         self.bins = [np.linspace(0, 1, bins_per_subaction + 2)[1:-1].tolist() for bins_per_subaction in self.bins_per_subaction_list]
         
@@ -83,12 +92,16 @@ class MCTS:
             return exploitation + exploration
         
         def puct(child: AlphaZeroNode):
-            exploitation = child.Q
+            exploitation = child.Q / (child.N + 1e-6)
             exploration = self.c * child.prior * np.sqrt(np.log(node.N+1)) / (1+ child.N)
             return exploitation + exploration
-
+        # print(f"Node at depth {node.depth} has {len(node.children)} children")
+        assert len(node.children) > 0, f"Node {node} has no children"
         # Select best child based on UCB
-        scores = [uct(child) for child in node.children]
+        if self.use_dnn:
+            scores = [puct(child) for child in node.children]
+        else:
+            scores = [uct(child) for child in node.children]
         max_score = max(scores)
         best_indices = [i for i, score in enumerate(scores) if score == max_score]
         chosen_index = random.choice(best_indices)
@@ -104,20 +117,57 @@ class MCTS:
             Tuple[float, float, float, float, float]
         """
         ratios = np.ones(5)
-        for i in range(5):
-            # Expand if not expanded
+        if self.use_dnn:
             if not self.current_node.expanded:
-                num_bins = self.bins_per_subaction_list[i]
-                for j in range(num_bins):
-                    depth = self.current_node.depth + 1
-                    task_idx, subaction_idx = self.current_node.get_node_index()
-                    child = Node(action=(task_idx, subaction_idx, self.bins[i][j]), depth=depth, parent=self.current_node)
-                    self.current_node.children.append(child)
-                self.current_node.expanded = True
-            # Select
-            max_child = self.best_child(self.current_node)
-            ratios[i] = max_child.action[2]
-            self.current_node = max_child
+                env_resources = torch.tensor(env_resources, dtype=torch.float32).unsqueeze(0)
+                probs = self.model(env_resources) # Shape: (5, ?, 20|10|10|10|10), the ? is like to access the values in Torch stupid stuff
+                for i in range(5):
+                    for j in range(self.bins_per_subaction_list[i]):
+                        prior = probs[i][j].item()
+                        depth = self.current_node.depth + 1
+                        task_idx, subaction_idx = self.current_node.get_node_index()
+                        child = AlphaZeroNode(action=(task_idx, subaction_idx, self.bins[i][j]), prior=prior, depth=depth, parent=self.current_node, task_dnn_output=probs)
+                        self.current_node.children.append(child)
+                        self.total_nodes += 1
+                    self.current_node.expanded = True
+                    max_child = self.best_child(self.current_node)
+                    ratios[i] = max_child.action[2]
+                    self.current_node = max_child
+                assert self.current_node.depth % 5 == 0, f"Current node depth is not a multiple of 5, {self.current_node.depth}"
+            else:
+                for i in range(5):
+                    if not self.current_node.expanded:
+                        task_idx, subaction_idx = self.current_node.get_node_index()
+                        probs = self.current_node.task_dnn_output[subaction_idx] # Quite stupid but as this is he case of the last node of the previous is expanded (this branch is discovered at least 1), so always the node at task k-1, subaction 4 is expanded with all 20 children of task k, subaction 0
+                        bins = self.bins[subaction_idx]
+                        assert len(bins) == len(probs), f"Bins and probs have different lengths, {len(bins)} != {len(probs)}"
+                        for j in range(len(bins)):
+                            prior = probs[j].item()
+                            depth = self.current_node.depth + 1
+                            child = AlphaZeroNode(action=(task_idx, subaction_idx, bins[j]), prior=prior, depth=depth, parent=self.current_node, task_dnn_output=self.current_node.task_dnn_output)
+                            self.current_node.children.append(child)
+                            self.total_nodes += 1
+                        self.current_node.expanded = True
+                    # Select
+                    max_child = self.best_child(self.current_node)
+                    ratios[i] = max_child.action[2]
+                    self.current_node = max_child
+        else:
+            for i in range(5):
+                # Expand if not expanded
+                if not self.current_node.expanded:
+                    num_bins = self.bins_per_subaction_list[i]
+                    for j in range(num_bins):
+                        depth = self.current_node.depth + 1
+                        task_idx, subaction_idx = self.current_node.get_node_index()
+                        child = Node(action=(task_idx, subaction_idx, self.bins[i][j]), depth=depth, parent=self.current_node)
+                        self.current_node.children.append(child)
+                        self.total_nodes += 1
+                    self.current_node.expanded = True
+                # Select
+                max_child = self.best_child(self.current_node)
+                ratios[i] = max_child.action[2]
+                self.current_node = max_child
         assert np.any(ratios >= 1.0) == False and np.any(ratios < 0.0) == False, f"Ratios are out of range, {ratios}"
         return tuple(ratios)
     
@@ -133,6 +183,7 @@ class MCTS:
     
     def extract_action_probabilities(self) -> np.ndarray:
         """Extract action probabilities from tree statistics"""
+        NUM_TASKS = 20 # TODO: Make this dynamic
         π = np.zeros((NUM_TASKS, self.num_subactions, max(self.bins_per_subaction_list)))
         node = self.current_node
         list_children = node.children
@@ -159,3 +210,6 @@ class MCTS:
                     π[t][s] /= total
     
         return π
+    
+    def get_node_count(self):
+        return self.total_nodes
