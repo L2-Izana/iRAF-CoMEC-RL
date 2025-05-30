@@ -1,27 +1,7 @@
 import os
 import time
 import matplotlib.pyplot as plt
-
-class IterationMetrics:
-    def __init__(self, total_tasks):
-        self.metrics = {
-            'completed_tasks': 0,
-            'total_latency': 0,
-            'total_energy': 0,
-            'time_points': [],
-            'edge_server_cpu_utilization': [],
-            'base_station_bandwidth_utilization': [],
-            'energy_per_task': [],
-            'latency_per_task': [],
-        }
-        self.total_tasks = total_tasks
-    
-    def reset(self):
-        self.metrics = {
-            'completed_tasks': 0,
-            'total_latency': 0,
-            'total_energy': 0,
-        }       
+import numpy as np
 
 class MetricsTracker:
     def __init__(self, total_tasks):
@@ -36,7 +16,12 @@ class MetricsTracker:
             'latency_per_task': [],
         }
         self.total_tasks = total_tasks
-
+        self.node_counts = []
+        self.rewards = []
+        self.empirical_run_number = self.get_latest_empirical_run() + 1
+        self.empirical_run_folder = f"result_plots/empirical_run_{self.empirical_run_number}"
+        os.makedirs(self.empirical_run_folder, exist_ok=True)
+        
     def reset(self):
         self.metrics = {
             'completed_tasks': 0,
@@ -48,7 +33,7 @@ class MetricsTracker:
             'energy_per_task': [],
             'latency_per_task': [],
         }
-
+    
     def record_metrics(self, time, edge_servers, base_stations):
         cpu_u = 1 - sum(s.available_cpu for s in edge_servers) / sum(s.cpu_capacity for s in edge_servers)
         bw_u = 1 - sum(bs.available_bandwidth for bs in base_stations) / sum(bs.total_bandwidth for bs in base_stations)
@@ -73,7 +58,50 @@ class MetricsTracker:
             }
         return {'avg_latency': 0, 'avg_energy': 0}
 
-    def plot_results(self, saved=False):
+    def record_tree_iteration_step_attributes(self, node_count, reward):
+        self.node_counts.append(node_count)
+        self.rewards.append(reward)
+
+
+    def plot_tree_iteration_step_attributes(self, saved=True):
+        plt.figure(figsize=(12, 10))
+
+        # Plot node count (top subplot)
+        plt.subplot(2, 1, 1)
+        plt.plot(self.node_counts)
+        plt.title('Node Count')
+        plt.xlabel('Iteration')
+        plt.ylabel('Node Count')
+
+        # Plot smoothed reward with shaded std (bottom subplot)
+        plt.subplot(2, 1, 2)
+        rewards = np.array(self.rewards)
+        window = 100
+
+        if len(rewards) >= window:
+            sma = np.convolve(rewards, np.ones(window)/window, mode='valid')
+            std = np.array([np.std(rewards[i-window:i]) for i in range(window, len(rewards) + 1)])
+            x = np.arange(len(sma))
+            plt.plot(x, sma, label='Moving Average Reward')
+            plt.fill_between(x, sma - std, sma + std, alpha=0.3, label='±1 Std. Dev')
+        else:
+            # Fallback if too few points
+            plt.plot(rewards, label='Reward (Raw)')
+
+        plt.title('Reward')
+        plt.xlabel('Iteration')
+        plt.ylabel('Reward')
+        plt.legend()
+        plt.grid(True)
+
+        plt.tight_layout()
+
+        if saved:
+            plt.savefig(f"{self.empirical_run_folder}/tree_iteration_step_attributes.png")
+        else:
+            plt.show()
+        
+    def plot_metrics(self, saved=False):
         plt.figure(figsize=(12, 10))
         
         # Task completion plot
@@ -112,6 +140,23 @@ class MetricsTracker:
             
         # Save plot
         if saved:
-            plt.savefig(f'result_plots/{time.strftime("%Y%m%d_%H%M%S")}.png')
+            plt.savefig(f'{self.empirical_run_folder}/metrics.png')
         else:
             plt.show()
+
+        
+    def plot_results(self, saved=False):
+        self.plot_metrics(saved)
+        self.plot_tree_iteration_step_attributes(saved)
+
+    def get_latest_empirical_run(self) -> int:
+        if os.path.exists('result_plots'):
+            folders = [f for f in os.listdir('result_plots') 
+                    if os.path.isdir(os.path.join('result_plots', f)) 
+                    and f.startswith('empirical_run_')]
+            if not folders:
+                return 0
+            # Extract numbers from folder names like 'empirical_run_1'
+            run_numbers = [int(f.split('_')[-1]) for f in folders]
+            return max(run_numbers)
+        return 0
