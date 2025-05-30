@@ -1,12 +1,9 @@
-import random
 import time
-from matplotlib import pyplot as plt
 import numpy as np
+
+from iraf_engine.iraf_engine import IraFEngine
 from ..core.comec_env import CoMECEnvironment
 from ..visualization.metrics import MetricsTracker
-
-# random.seed(187)
-# np.random.seed(187)
 
 class CoMECSimulator:
     """
@@ -16,11 +13,15 @@ class CoMECSimulator:
     """
     def __init__(
         self,
+        num_devices,
+        num_tasks,
+        iterations,
+        num_es,
+        num_bs,
         need_duration=False,
-        iterations=1,
         max_time=10000,
         retry_interval=10,
-        **env_kwargs
+        use_dnn=False,
     ):
         self.need_duration = need_duration
         self.iterations = iterations
@@ -28,22 +29,26 @@ class CoMECSimulator:
         self.retry_interval = retry_interval
 
         # Create environment and metrics
-        self.env = CoMECEnvironment(retry_interval=retry_interval, **env_kwargs)
+        self.env = CoMECEnvironment(retry_interval=retry_interval, num_devices=num_devices, num_tasks=num_tasks, num_edge_servers=num_es, num_bs=num_bs)
         self.metrics = MetricsTracker(self.env.num_tasks)
 
         # MCTS engine placeholder
-        self.iraf_engine = None
+        self.iraf_engine = IraFEngine(input_dim=4+num_es+num_bs, use_dnn=use_dnn)
+        self.use_dnn = use_dnn
 
-    def install_iraf_engine(self, engine):
-        self.iraf_engine = engine
 
     def run(self, residual=True, optimize_for='latency'):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         self.env.reset(reset_tasks=True)
         for _ in range(self.iterations):
-            if _ % 1000 == 0:
-                print(f"Running iteration {_}")
+            if (_ + 1) % 500 == 0:
+                print(f"Running iteration {_ + 1}")
+                print(f"Current metrics:")
+                average_metrics = self.metrics.get_average_metrics()
+                print(f"Average latency: {average_metrics['avg_latency']:.2f}")
+                print(f"Average energy: {average_metrics['avg_energy']:.2f}")
+                print(f"Node count: {self.iraf_engine.get_node_count()}")
             # Restart environment and metrics
             self.env.reset(reset_tasks=False)
             self.metrics.reset()
@@ -62,7 +67,10 @@ class CoMECSimulator:
                     break
                 if event['func_name'] == '_handle_request':
                     task = event['args'][0]
-                    env_resources = self.env.get_resources(task)
+                    if self.use_dnn:
+                        env_resources = self.env.get_resources_dnn(task)
+                    else:
+                        env_resources = self.env.get_resources(task)
                     alphas = self.iraf_engine.get_ratios(env_resources)
                     step_args = ("_handle_request", (task, alphas, residual))
                 elif event['func_name'] == '_handle_completion':
@@ -86,9 +94,18 @@ class CoMECSimulator:
             average_metrics = self.metrics.get_average_metrics()
             self.iraf_engine.backprop(average_metrics, optimize_for=optimize_for)
             
+            # Record tree iteration step attributes
+            if optimize_for == 'latency':
+                reward = average_metrics['avg_latency']
+            elif optimize_for == 'energy':
+                reward = average_metrics['avg_energy']
+            else:
+                reward = average_metrics['avg_latency'] + average_metrics['avg_energy']
+            self.metrics.record_tree_iteration_step_attributes(self.iraf_engine.get_node_count(), reward)
+            
             # Note: task completions record latency/energy via callbacks
             all_metrics.append(average_metrics)
-            # time.sleep(1)
+            
         if optimize_for == 'latency':
             metrics = [metric['avg_latency'] for metric in all_metrics]
             

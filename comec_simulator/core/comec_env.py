@@ -7,10 +7,6 @@ import numpy as np
 from ..core.components import BaseStation, EdgeServer, MobileDevice, Task
 from ..core.constants import *
 
-# random.seed(187)
-# np.random.seed(187)
-
-
 class CoMECEnvironment:
     """
     A standalone environment for CoMEC simulation:
@@ -19,7 +15,7 @@ class CoMECEnvironment:
     - Computes resource allocation, latency, and energy
     """
     def __init__(self, num_devices=20, num_tasks=50, arrival_window=10000,
-                 num_edge_servers=NUM_EDGE_SERVERS, num_bs=NUM_BS, retry_interval=10):
+                 num_edge_servers=4, num_bs=1, retry_interval=10):
         self.num_devices = num_devices
         self.num_tasks = num_tasks
         self.arrival_window = arrival_window
