@@ -19,3 +19,7 @@ DEFAULT_MAX_LATENCY = 2000  # ms
 DEVICE_CPU_FREQ = 3e8  # Hz
 MIN_TRANSMIT_POWER = 32  # mW
 MAX_TRANSMIT_POWER = 197  # mW 
+
+# Tree parameters
+TREE_STORAGE_BUDGET = 1e7 # 10 million nodes, if more than this, RAM explodes :(
+

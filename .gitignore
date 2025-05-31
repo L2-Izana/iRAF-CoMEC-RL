@@ -187,3 +187,4 @@ pi_dataset_small/
 *.txt
 *.pt
 *.pth
+*.bat
