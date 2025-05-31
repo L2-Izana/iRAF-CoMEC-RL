@@ -19,17 +19,11 @@ class IraFEngine:
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
-    def backprop(self, average_metrics, optimize_for='latency'):
+    def backprop(self, reward):
         if self.algorithm == 'mcts':
-            if optimize_for == 'latency':           
-                reward = -average_metrics['avg_latency']
-            elif optimize_for == 'energy':
-                reward = -average_metrics['avg_energy']
-            elif optimize_for == 'latency_energy':
-                reward = -average_metrics['avg_latency'] - average_metrics['avg_energy']
-            else:
-                raise ValueError(f"Optimize for {optimize_for} not supported")
             self.mcts.backprop(reward)
+        else:
+            raise ValueError(f"Algorithm {self.algorithm} not supported")
 
     def get_best_action(self):
         if self.algorithm == 'mcts':

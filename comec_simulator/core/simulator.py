@@ -5,6 +5,11 @@ from iraf_engine.iraf_engine import IraFEngine
 from ..core.comec_env import CoMECEnvironment
 from ..visualization.metrics import MetricsTracker
 
+TREE_STORAGE_BUDGET = 1e7 # 10 million nodes, if more than this, RAM explodes :(
+TREE_CONVERGENCE_THRESHOLD = 0.01
+TREE_CONVERGENCE_WINDOW = 100
+TREE_CONVERGENCE_ITERATION_LIMIT = 1000
+
 class CoMECSimulator:
     """
     High-level simulator that runs episodes on CoMECEnvironment,
@@ -41,14 +46,11 @@ class CoMECSimulator:
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         self.env.reset(reset_tasks=True)
-        for _ in range(self.iterations):
-            if (_ + 1) % 500 == 0:
-                print(f"Running iteration {_ + 1}")
-                print(f"Current metrics:")
-                average_metrics = self.metrics.get_average_metrics()
-                print(f"Average latency: {average_metrics['avg_latency']:.2f}")
-                print(f"Average energy: {average_metrics['avg_energy']:.2f}")
-                print(f"Node count: {self.iraf_engine.get_node_count()}")
+
+        for _ in range(self.iterations):            
+            if self.check_tree_stop_condition(self.iraf_engine.get_node_count(), self.metrics.rewards, self.metrics.get_average_metrics(), self.get_objective_value(self.metrics.get_average_metrics(), optimize_for), _):
+                break
+
             # Restart environment and metrics
             self.env.reset(reset_tasks=False)
             self.metrics.reset()
@@ -92,19 +94,22 @@ class CoMECSimulator:
 
             # After run, backprop the tree and collect final data
             average_metrics = self.metrics.get_average_metrics()
-            self.iraf_engine.backprop(average_metrics, optimize_for=optimize_for)
+            reward = self.get_objective_value(average_metrics, optimize_for)
+            
+            self.iraf_engine.backprop(-reward) # Make it negative to minimize the objective value
+            node_count = self.iraf_engine.get_node_count()
+            
             
             # Record tree iteration step attributes
-            if optimize_for == 'latency':
-                reward = average_metrics['avg_latency']
-            elif optimize_for == 'energy':
-                reward = average_metrics['avg_energy']
-            else:
-                reward = average_metrics['avg_latency'] + average_metrics['avg_energy']
-            self.metrics.record_tree_iteration_step_attributes(self.iraf_engine.get_node_count(), reward)
+            self.metrics.record_tree_iteration_step_attributes(node_count, reward)
             
             # Note: task completions record latency/energy via callbacks
             all_metrics.append(average_metrics)
+            
+            # Log the performance every 500 iterations            
+            if (_ + 1) % 500 == 0:
+                self.print_results(average_metrics, node_count, reward, _)
+
             
         if optimize_for == 'latency':
             metrics = [metric['avg_latency'] for metric in all_metrics]
@@ -152,3 +157,56 @@ class CoMECSimulator:
                 self.env.step(step_args)
 
         return np.array(env_resources_record)
+
+    def get_objective_value(self, average_metrics, optimize_for):
+        if optimize_for == 'latency':
+            return average_metrics['avg_latency']
+        elif optimize_for == 'energy':
+            return average_metrics['avg_energy']
+        else:
+            return average_metrics['avg_latency'] + average_metrics['avg_energy']
+
+    def has_converged(self, rewards):
+        if len(rewards) >= TREE_CONVERGENCE_ITERATION_LIMIT: # Thee tree needs lots of iterations to converge
+            return np.std(rewards[-TREE_CONVERGENCE_WINDOW:]) < TREE_CONVERGENCE_THRESHOLD
+        return False
+    
+    def print_results(self, average_metrics, node_count, reward, iteration):
+        # Box drawing characters
+        top_bottom = "═" * 40
+        side = "║"
+        
+        # Format the metrics with fixed width
+        iteration_str = f"Iteration: {iteration + 1}"
+        latency_str = f"Average Latency: {average_metrics['avg_latency']:.2f}"
+        energy_str = f"Average Energy: {average_metrics['avg_energy']:.2f}"
+        nodes_str = f"Node Count: {node_count}"
+        reward_str = f"Reward: {reward:.2f}"
+        
+        # Print the box
+        print(f"\n╔{top_bottom}╗")
+        print(f"{side}{iteration_str:^40}{side}")
+        print(f"{side}{'─' * 40}{side}")
+        print(f"{side}{latency_str:^40}{side}")
+        print(f"{side}{energy_str:^40}{side}")
+        print(f"{side}{nodes_str:^40}{side}")
+        print(f"{side}{reward_str:^40}{side}")
+        print(f"╚{top_bottom}╝\n")
+
+    def check_tree_stop_condition(self, node_count, rewards, average_metrics, reward, _):
+        # Check if the tree reaches the storage budget 
+        if node_count >= TREE_STORAGE_BUDGET:
+            print(f"\n╔{'═' * 40}╗")
+            print(f"║{'Tree Reaches Storage Budget':^40}║")
+            print(f"╚{'═' * 40}╝\n")
+            self.print_results(average_metrics, node_count, reward, _)
+            return True
+        
+        # Check if the reward has converged
+        if self.has_converged(self.metrics.rewards):
+            print(f"\n╔{'═' * 40}╗")
+            print(f"║{'Reward Has Converged':^40}║")
+            print(f"╚{'═' * 40}╝\n")
+            self.print_results(average_metrics, node_count, reward, _)
+            return True
+        return False
