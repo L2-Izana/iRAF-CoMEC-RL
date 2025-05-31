@@ -22,4 +22,6 @@ MAX_TRANSMIT_POWER = 197  # mW
 
 # Tree parameters
 TREE_STORAGE_BUDGET = 1e7 # 10 million nodes, if more than this, RAM explodes :(
+TREE_CONVERGENCE_THRESHOLD = 0.01
+TREE_CONVERGENCE_WINDOW = 100
 

@@ -38,8 +38,9 @@ np.random.seed(187)
 #     metrics = sim.run(residual=True, optimize_for='latency_energy')
 #     sim.metrics.plot_results(saved=True)
 
+MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'random', 'greedy']
 parser = argparse.ArgumentParser()
-parser.add_argument("--use_dnn", type=bool, default=False)
+parser.add_argument("--algorithm", type=str, default='mcts-pw')
 parser.add_argument("--num_devices", type=int, default=5)
 parser.add_argument("--num_tasks", type=int, default=20)
 parser.add_argument("--iterations", type=int, default=10000)
@@ -50,8 +51,8 @@ args = parser.parse_args()
 
 def bulk_run_data_collection(num_runs: int = 20):
     for i in range(0,20):
-        sim = CoMECSimulator(num_devices=args.num_devices, num_tasks=args.num_tasks, iterations=args.iterations)
-        sim.install_iraf_engine(IraFEngine(algorithm='mcts'))
+        sim = CoMECSimulator(num_devices=args.num_devices, num_tasks=args.num_tasks, iterations=args.iterations, num_es=args.num_es, num_bs=args.num_bs)
+        sim.install_iraf_engine(IraFEngine(algorithm=args.algorithm))
         metrics = sim.run(residual=True, optimize_for='latency_energy')
         best_action = sim.iraf_engine.get_best_action()
         env_resources_record = sim.run_with_best_action(best_action)
@@ -63,6 +64,8 @@ def bulk_run_data_collection(num_runs: int = 20):
         np.save(f"pi_dataset_small/{i}/action_probabilities.npy", action_probabilities)
         np.save(f"pi_dataset_small/{i}/env_resources_record.npy", env_resources_record)
 
-sim = CoMECSimulator(num_devices=args.num_devices, num_tasks=args.num_tasks, iterations=args.iterations, use_dnn=args.use_dnn, num_es=args.num_es, num_bs=args.num_bs)
-metrics = sim.run(residual=True, optimize_for='latency_energy')
-sim.metrics.plot_results(saved=True)
+if __name__ == "__main__":
+    sim = CoMECSimulator(num_devices=args.num_devices, num_tasks=args.num_tasks, iterations=args.iterations, num_es=args.num_es, num_bs=args.num_bs, algorithm=args.algorithm)
+    metrics = sim.run(residual=True, optimize_for='latency_energy')
+    sim.metrics.plot_results(saved=True)
+

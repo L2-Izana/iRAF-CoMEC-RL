@@ -9,43 +9,7 @@ import torch.nn as nn
 from comec_simulator.core.components import BaseStation, EdgeServer, Task
 from iraf_engine.dnn import IRafMultiTaskDNN
 import random
-
-class Node:
-    def __init__(self, action: Optional[Tuple[int, int, float]] = None, depth: int = 0, num_subactions: int = 5, parent = None):
-        self.children: List[Node] = []
-        self.parent: Optional[Node] = parent
-        self.N = 0  # Visit count
-        self.Q = 0.0  # Total value
-        self.action = action  # (task_idx, subaction_idx, bin_value)
-        self.expanded = False
-        self.depth = depth
-        self.num_subactions = num_subactions
-
-    def is_terminal(self, total_tasks: int) -> bool:
-        return self.depth == total_tasks * self.num_subactions
-
-    def get_node_index(self) -> Tuple[int, int]:
-        idx = self.depth
-        return idx // self.num_subactions, idx % self.num_subactions
-
-    def is_fully_expanded(self) -> bool:
-        return self.expanded
-
-    def __str__(self):
-        return f"[ClassicNode] depth={self.depth}, action={self.action}, Q={self.Q:.3f}, N={self.N}"
-
-class AlphaZeroNode(Node):
-    def __init__(self, action: Optional[Tuple[int, int, float]] = None, prior: float = 0.0, depth: int = 0, num_subactions: int = 5, parent = None, task_dnn_output=None):
-        super().__init__(action, depth, num_subactions, parent)
-        self.prior = prior  # Prior from policy network
-        self.value_sum = 0.0  # Sum of NN values for average estimation
-        self.task_dnn_output = task_dnn_output # A helper storage of DNN output for each task, used to solve the bug where for retravesal, it explores new subactions but we only get DNN output for the original subaction
-
-    def get_mean_value(self) -> float:
-        return self.value_sum / self.N if self.N > 0 else 0.0
-
-    def __str__(self):
-        return f"[AlphaZeroNode] depth={self.depth}, action={self.action}, prior={self.prior:.3f}, Q={self.Q:.3f}, N={self.N}"
+from iraf_engine.node import Node, AlphaZeroNode
 
 class MCTS:
     def __init__(self, input_dim, exploration_constant=0.8, num_subactions: int = 5, bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10], use_dnn: bool = False):
@@ -107,7 +71,6 @@ class MCTS:
         chosen_index = random.choice(best_indices)
         return node.children[chosen_index]
     
-    
     def get_ratios(self, env_resources) -> Tuple[float, float, float, float, float]:
         """
         Get the ratios for the task: So for each task other environment conditions, we c
@@ -153,21 +116,7 @@ class MCTS:
                     ratios[i] = max_child.action[2]
                     self.current_node = max_child
         else:
-            for i in range(5):
-                # Expand if not expanded
-                if not self.current_node.expanded:
-                    num_bins = self.bins_per_subaction_list[i]
-                    for j in range(num_bins):
-                        depth = self.current_node.depth + 1
-                        task_idx, subaction_idx = self.current_node.get_node_index()
-                        child = Node(action=(task_idx, subaction_idx, self.bins[i][j]), depth=depth, parent=self.current_node)
-                        self.current_node.children.append(child)
-                        self.total_nodes += 1
-                    self.current_node.expanded = True
-                # Select
-                max_child = self.best_child(self.current_node)
-                ratios[i] = max_child.action[2]
-                self.current_node = max_child
+            ratios = self._expand_node_no_dnn(ratios)
         assert np.any(ratios >= 1.0) == False and np.any(ratios < 0.0) == False, f"Ratios are out of range, {ratios}"
         return tuple(ratios)
     
@@ -213,3 +162,21 @@ class MCTS:
     
     def get_node_count(self):
         return self.total_nodes
+    
+    def _expand_node_no_dnn(self, ratios: List[float]):
+        for i in range(5):
+            # Expand if not expanded
+            if not self.current_node.expanded:
+                num_bins = self.bins_per_subaction_list[i]
+                for j in range(num_bins):
+                    depth = self.current_node.depth + 1
+                    task_idx, subaction_idx = self.current_node.get_node_index()
+                    child = Node(action=(task_idx, subaction_idx, self.bins[i][j]), depth=depth, parent=self.current_node)
+                    self.current_node.children.append(child)
+                    self.total_nodes += 1
+                self.current_node.expanded = True
+            # Select
+            max_child = self.best_child(self.current_node)
+            ratios[i] = max_child.action[2]
+            self.current_node = max_child
+        return ratios
