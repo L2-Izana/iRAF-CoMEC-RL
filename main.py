@@ -38,14 +38,15 @@ np.random.seed(187)
 #     metrics = sim.run(residual=True, optimize_for='latency_energy')
 #     sim.metrics.plot_results(saved=True)
 
-MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'random', 'greedy']
+MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'mcts-pw-dnn', 'random', 'greedy']
 parser = argparse.ArgumentParser()
-parser.add_argument("--algorithm", type=str, default='mcts-pw')
+parser.add_argument("--algorithm", type=str, default='mcts-pw-dnn')
 parser.add_argument("--num_devices", type=int, default=5)
 parser.add_argument("--num_tasks", type=int, default=20)
 parser.add_argument("--iterations", type=int, default=10000)
 parser.add_argument("--num_es", type=int, default=4)
 parser.add_argument("--num_bs", type=int, default=1)
+parser.add_argument("--save_empirical_run", type=bool, default=False)
 args = parser.parse_args()
 
 
@@ -66,6 +67,6 @@ def bulk_run_data_collection(num_runs: int = 20):
 
 if __name__ == "__main__":
     sim = CoMECSimulator(num_devices=args.num_devices, num_tasks=args.num_tasks, iterations=args.iterations, num_es=args.num_es, num_bs=args.num_bs, algorithm=args.algorithm)
-    metrics = sim.run(residual=True, optimize_for='latency_energy')
+    metrics = sim.run(residual=True, optimize_for='latency_energy', save_empirical_run=args.save_empirical_run)
     sim.metrics.plot_results(saved=True)
 

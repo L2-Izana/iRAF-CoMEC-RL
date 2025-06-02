@@ -20,7 +20,6 @@ class MetricsTracker:
         self.rewards = []
         self.empirical_run_number = self.get_latest_empirical_run() + 1
         self.empirical_run_folder = f"result_plots/empirical_run_{self.empirical_run_number}"
-        os.makedirs(self.empirical_run_folder, exist_ok=True)
         
     def reset(self):
         self.metrics = {
@@ -146,6 +145,7 @@ class MetricsTracker:
 
         
     def plot_results(self, saved=False):
+        os.makedirs(self.empirical_run_folder, exist_ok=True)
         self.plot_metrics(saved)
         self.plot_tree_iteration_step_attributes(saved)
 
