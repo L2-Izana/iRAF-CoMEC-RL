@@ -9,6 +9,9 @@ This project implements a Monte Carlo Tree Search (MCTS) based solution for opti
 ## Features
 
 - MCTS-based task scheduling with UCT exploration
+- Progressive Widening mechanism for efficient tree expansion
+- Beta sampling as lightweight heuristic guide
+- Support for both DNN and non-DNN modes
 - Action probability extraction for policy analysis
 - Comprehensive performance metrics tracking
 - Visualization tools for analysis
@@ -30,6 +33,7 @@ This project implements a Monte Carlo Tree Search (MCTS) based solution for opti
 
 - Python 3.8+
 - NumPy
+- Matplotlib
 - Additional dependencies listed in requirements.txt
 
 ## Usage
@@ -56,9 +60,22 @@ The system generates several metrics files:
 - `action_probabilities.npy`: Extracted policy information
 - `best_action.txt`: Optimal action sequences
 
+## Key Features
+
+### Progressive Widening
+- Basic Progressive Widening mechanism in tree expansion phase
+- Efficient exploration of action space
+- Works seamlessly with both DNN and non-DNN modes
+
+### Beta Sampling
+- Lightweight heuristic guide alternative to DNN
+- Efficient action selection strategy
+- Reduced computational overhead
+
 ## Future Improvements
 
-- Integration of Deep Neural Network to reduce search space
+- Enhanced Progressive Widening strategies
+- Advanced beta sampling parameters optimization
 - Memory optimization for MCTS tree structure
 - Parallel tree search implementation
 - Enhanced visualization tools
