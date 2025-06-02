@@ -26,7 +26,8 @@ class CoMECSimulator:
         need_duration=False,
         max_time=10000,
         retry_interval=10,
-        algorithm='mcts-dnn'
+        algorithm='mcts-pw-dnn',
+        save_empirical_run=False 
     ):
         self.need_duration = need_duration
         self.iterations = iterations
@@ -40,6 +41,7 @@ class CoMECSimulator:
         # MCTS engine placeholder
         self.iraf_engine = IraFEngine(input_dim=4+num_es+num_bs, algorithm=algorithm)
         self.algorithm = algorithm
+        self.save_empirical_run = save_empirical_run
 
     def run(self, residual=True, optimize_for='latency'):
         """Run simulation for `iterations` episodes and return metrics."""
@@ -58,16 +60,13 @@ class CoMECSimulator:
                 # If we've exceeded time, stop
                 if self.need_duration and self.env.event_queue and self.env.event_queue[0][0] > self.max_time:
                     break
-                # progressed = self.env.step()
-                # if not progressed:
-                #     break
                 event = self.env.pop_event()
                 step_args = None
                 if event is None:
                     break
                 if event['func_name'] == '_handle_request':
                     task = event['args'][0]
-                    if self.algorithm != 'mcts':
+                    if 'dnn' in self.algorithm:
                         env_resources = self.env.get_resources_dnn(task)
                     else:
                         env_resources = self.env.get_resources(task)
@@ -118,8 +117,9 @@ class CoMECSimulator:
             metrics = [metric['avg_latency'] + metric['avg_energy'] for metric in all_metrics]
         else:
             raise ValueError(f"Invalid optimize_for: {optimize_for}")
-        with open(f'{optimize_for}_metrics_{self.algorithm}_{time.time()}.txt', 'w') as f:
-            np.savetxt(f, metrics)
+        if self.save_empirical_run:
+            with open(f'{optimize_for}_metrics_{self.algorithm}_{time.time()}.txt', 'w') as f:
+                np.savetxt(f, metrics)
         return all_metrics
     
     def run_with_best_action(self, best_action, residual=True, optimize_for='latency'):
@@ -200,11 +200,11 @@ class CoMECSimulator:
             self.print_results(average_metrics, node_count, reward, _)
             return True
         
-        # # Check if the reward has converged
-        # if self.has_converged(self.metrics.rewards):
-        #     print(f"\n╔{'═' * 40}╗")
-        #     print(f"║{'Reward Has Converged':^40}║")
-        #     print(f"╚{'═' * 40}╝\n")
-        #     self.print_results(average_metrics, node_count, reward, _)
-        #     return True
+        # Check if the reward has converged
+        if self.has_converged(self.metrics.rewards):
+            print(f"\n╔{'═' * 40}╗")
+            print(f"║{'Reward Has Converged':^40}║")
+            print(f"╚{'═' * 40}╝\n")
+            self.print_results(average_metrics, node_count, reward, _)
+            return True
         return False
