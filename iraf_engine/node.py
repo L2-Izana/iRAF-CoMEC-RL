@@ -6,6 +6,8 @@ class Node:
         self.parent: Optional[Node] = parent
         self.N = 0  # Visit count
         self.Q = 0.0  # Total value
+        self.W = 0.0  # Total weight
+        self.reward = 0.0  # Total reward   
         self.action = action  # (task_idx, subaction_idx, bin_value)
         self.expanded = False
         self.depth = depth

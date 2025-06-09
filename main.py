@@ -25,8 +25,8 @@ def print_memory_usage(note=""):
 MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'mcts-pw-dnn', 'random', 'greedy']
 parser = argparse.ArgumentParser()
 parser.add_argument("--algorithm", type=str, default='mcts-pw-dnn')
-parser.add_argument("--num_devices", type=int, default=15)
-parser.add_argument("--num_tasks", type=int, default=30)
+parser.add_argument("--num_devices", type=int, default=10)
+parser.add_argument("--num_tasks", type=int, default=20)
 parser.add_argument("--iterations", type=int, default=15000)
 parser.add_argument("--num_es", type=int, default=4)
 parser.add_argument("--num_bs", type=int, default=1)
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     metrics = sim.run(residual=True, optimize_for='latency_energy')
     print_memory_usage("After running simulation")
-
-    sim.metrics.plot_results(saved=True)
-    sim.metrics.save_metrics(saved=True)
+    
+    sim.metrics.plot_results(saved=False)
+    # sim.metrics.save_metrics(saved=False)
     print_memory_usage("After saving results")

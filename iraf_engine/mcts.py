@@ -31,6 +31,7 @@ class MCTS:
         self.current_node = self.root
         self.bins = [np.linspace(0, 1, bins_per_subaction + 2)[1:-1].tolist() for bins_per_subaction in self.bins_per_subaction_list]
         self.dnn_call_count = 0
+        self.discount_factor = 0.99
     
     def backprop(self, reward: float):
         """Update node statistics upward through the tree"""
@@ -45,12 +46,27 @@ class MCTS:
         action_sequence.reverse()
         action_sequence = np.array(action_sequence).reshape(-1, 5) 
 
+    def backprop_new(self, reward: float):
+        """Update node statistics upward through the tree"""
+        action_sequence = []
+        while self.current_node.parent is not None:
+            action_sequence.append(self.current_node.action[2])
+            self.current_node.N += 1
+            self.current_node.W += reward
+            self.current_node.Q = self.current_node.W / self.current_node.N
+            reward = self.current_node.reward + self.discount_factor * reward  # Use fixed per-node reward
+            self.current_node = self.current_node.parent
+        self.current_node.N += 1
+        self.current_node.W += reward
+        self.current_node.Q = self.current_node.W / self.current_node.N
+        action_sequence.reverse()
+        action_sequence = np.array(action_sequence).reshape(-1, 5) 
+
     def best_child(self, node: Node) -> Node:
         """Select the best child based on UCB score"""
         def uct(child: Node):
             # For negative rewards, higher (less negative) Q/N is better
             exploitation = child.Q / (child.N + 1e-6)
-            
             # Add exploration bonus
             exploration = self.c * np.sqrt(np.log(node.N+1) / (1+child.N))
             
