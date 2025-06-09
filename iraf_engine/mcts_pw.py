@@ -49,7 +49,7 @@ class MCTS_PW(MCTS):
         ratios = np.ones(5)
         if self._is_unexpanded(self.current_node): # This is the case of the first rollout of undiscovered node
             env_resources = torch.tensor(env_resources, dtype=torch.float32).unsqueeze(0)
-            with torch.no_grad():
+            with torch.no_grad():   
                 probs = self.model(env_resources)
             probs = [p.detach() for p in probs]
             self.dnn_call_count += 1
