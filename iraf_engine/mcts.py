@@ -24,12 +24,13 @@ class MCTS:
             self.model = IRafMultiTaskDNN(input_dim=input_dim, head_dims=[20, 10, 10, 10, 10])
             self.model.load_state_dict(torch.load("D:\\Research\\IoT\\iRAF-CoMEC-RL\\trained_iraf_policy_small.pt", weights_only=True))
             self.root = AlphaZeroNode(depth=0)
+            self.model.eval()
         else:
             self.model = None
             self.root = Node(depth=0)
         self.current_node = self.root
         self.bins = [np.linspace(0, 1, bins_per_subaction + 2)[1:-1].tolist() for bins_per_subaction in self.bins_per_subaction_list]
-        
+        self.dnn_call_count = 0
     
     def backprop(self, reward: float):
         """Update node statistics upward through the tree"""
@@ -84,7 +85,10 @@ class MCTS:
         if self.use_dnn:
             if not self.current_node.expanded:
                 env_resources = torch.tensor(env_resources, dtype=torch.float32).unsqueeze(0)
-                probs = self.model(env_resources) # Shape: (5, ?, 20|10|10|10|10), the ? is like to access the values in Torch stupid stuff
+                with torch.no_grad():
+                    probs = self.model(env_resources)
+                probs = [p.detach() for p in probs]
+                self.dnn_call_count += 1
                 for i in range(5):
                     for j in range(self.bins_per_subaction_list[i]):
                         prior = probs[i][j].item()

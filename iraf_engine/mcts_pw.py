@@ -49,7 +49,10 @@ class MCTS_PW(MCTS):
         ratios = np.ones(5)
         if self._is_unexpanded(self.current_node): # This is the case of the first rollout of undiscovered node
             env_resources = torch.tensor(env_resources, dtype=torch.float32).unsqueeze(0)
-            probs = self.model(env_resources) # Shape: (5, ?, 20|10|10|10|10), the ? is like to access the values in Torch stupid stuff
+            with torch.no_grad():
+                probs = self.model(env_resources)
+            probs = [p.detach() for p in probs]
+            self.dnn_call_count += 1
             self.current_node.task_dnn_output = probs # No need for children_dnn_output, so let's think like dnn output is needed for the later subactions, so for the last node of the previous task, it does not need to store the dnn for above subactions, so it can store the dnn output for the current task
             for i in range(5):
                 progressive_widening_floor = self._get_progressive_widening_floor(self.current_node)

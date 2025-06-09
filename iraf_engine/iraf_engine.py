@@ -63,3 +63,15 @@ class IraFEngine:
             return self.mcts_pw.get_node_count()
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
+
+    def get_dnn_call_count(self):
+        if 'dnn' in self.algorithm:
+            if self.algorithm == 'mcts-pw-dnn':
+                return self.mcts_pw.dnn_call_count
+            elif self.algorithm == 'mcts-dnn':
+                return self.mcts.dnn_call_count
+            else:
+                return 0    
+        else:
+            return 0
+        
