@@ -58,8 +58,8 @@ class IraFEngine:
     
     def get_node_count(self):
         if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
-            return self.mcts.total_nodes
+            return self.mcts.get_node_count()
         elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
-            return self.mcts_pw.total_nodes
+            return self.mcts_pw.get_node_count()
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")

@@ -26,8 +26,7 @@ class CoMECSimulator:
         need_duration=False,
         max_time=10000,
         retry_interval=10,
-        algorithm='mcts-pw-dnn',
-        save_empirical_run=False 
+        algorithm='mcts-pw-dnn' 
     ):
         self.need_duration = need_duration
         self.iterations = iterations
@@ -41,9 +40,8 @@ class CoMECSimulator:
         # MCTS engine placeholder
         self.iraf_engine = IraFEngine(input_dim=4+num_es+num_bs, algorithm=algorithm)
         self.algorithm = algorithm
-        self.save_empirical_run = save_empirical_run
-
-    def run(self, residual=True, optimize_for='latency'):
+            
+    def run(self, residual=True, optimize_for='latency', save_empirical_run=False):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         self.env.reset(reset_tasks=True)
@@ -117,7 +115,7 @@ class CoMECSimulator:
             metrics = [metric['avg_latency'] + metric['avg_energy'] for metric in all_metrics]
         else:
             raise ValueError(f"Invalid optimize_for: {optimize_for}")
-        if self.save_empirical_run:
+        if save_empirical_run:
             with open(f'{optimize_for}_metrics_{self.algorithm}_{time.time()}.txt', 'w') as f:
                 np.savetxt(f, metrics)
         return all_metrics

@@ -3,6 +3,8 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
+EMPERICAL_RUN_FOLDER = "empirical_runs"
+
 class MetricsTracker:
     def __init__(self, total_tasks):
         self.metrics = {
@@ -19,7 +21,7 @@ class MetricsTracker:
         self.node_counts = []
         self.rewards = []
         self.empirical_run_number = self.get_latest_empirical_run() + 1
-        self.empirical_run_folder = f"result_plots/empirical_run_{self.empirical_run_number}"
+        self.empirical_run_folder = f"{EMPERICAL_RUN_FOLDER}/number_{self.empirical_run_number}"
         
     def reset(self):
         self.metrics = {
@@ -134,8 +136,8 @@ class MetricsTracker:
         plt.tight_layout()
         
         # Create results directory if it doesn't exist
-        if not os.path.exists('result_plots'):
-            os.makedirs('result_plots')
+        if not os.path.exists(EMPERICAL_RUN_FOLDER):
+            os.makedirs(EMPERICAL_RUN_FOLDER)
             
         # Save plot
         if saved:
@@ -149,14 +151,21 @@ class MetricsTracker:
         self.plot_metrics(saved)
         self.plot_tree_iteration_step_attributes(saved)
 
+    def save_metrics(self, saved=False):
+        os.makedirs(self.empirical_run_folder, exist_ok=True)
+        for key, value in self.metrics.items():
+            np.save(f"{self.empirical_run_folder}/{key}.npy", value)
+        np.save(f"{self.empirical_run_folder}/node_counts.npy", self.node_counts)
+        np.save(f"{self.empirical_run_folder}/rewards.npy", self.rewards)
+        
     def get_latest_empirical_run(self) -> int:
-        if os.path.exists('result_plots'):
-            folders = [f for f in os.listdir('result_plots') 
-                    if os.path.isdir(os.path.join('result_plots', f)) 
-                    and f.startswith('empirical_run_')]
+        if os.path.exists(EMPERICAL_RUN_FOLDER):
+            folders = [f for f in os.listdir(EMPERICAL_RUN_FOLDER) 
+                    if os.path.isdir(os.path.join(EMPERICAL_RUN_FOLDER, f))
+                    and f.startswith('number_')]
             if not folders:
                 return 0
             # Extract numbers from folder names like 'empirical_run_1'
-            run_numbers = [int(f.split('_')[-1]) for f in folders]
+            run_numbers = [int(f.split('_')[1]) for f in folders]
             return max(run_numbers)
         return 0
