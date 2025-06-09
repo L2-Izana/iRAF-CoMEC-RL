@@ -35,7 +35,7 @@ class CoMECSimulator:
 
         # Create environment and metrics
         self.env = CoMECEnvironment(retry_interval=retry_interval, num_devices=num_devices, num_tasks=num_tasks, num_edge_servers=num_es, num_bs=num_bs)
-        self.metrics = MetricsTracker(self.env.num_tasks)
+        self.metrics = MetricsTracker(self.env.num_tasks, algorithm)
 
         # MCTS engine placeholder
         self.iraf_engine = IraFEngine(input_dim=4+num_es+num_bs, algorithm=algorithm)

@@ -6,7 +6,7 @@ import numpy as np
 EMPERICAL_RUN_FOLDER = "empirical_runs"
 
 class MetricsTracker:
-    def __init__(self, total_tasks):
+    def __init__(self, total_tasks, algorithm):
         self.metrics = {
             'completed_tasks': 0,
             'total_latency': 0,
@@ -21,7 +21,7 @@ class MetricsTracker:
         self.node_counts = []
         self.rewards = []
         self.empirical_run_number = self.get_latest_empirical_run() + 1
-        self.empirical_run_folder = f"{EMPERICAL_RUN_FOLDER}/number_{self.empirical_run_number}"
+        self.empirical_run_folder = f"{EMPERICAL_RUN_FOLDER}/number_{self.empirical_run_number}_{total_tasks}_{algorithm}"
         
     def reset(self):
         self.metrics = {
