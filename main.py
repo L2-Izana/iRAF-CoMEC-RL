@@ -22,12 +22,12 @@ def print_memory_usage(note=""):
     print(f"[MEMORY] {note} - RSS: {mem:.2f} MB")
 
 # Argument parsing
-MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'mcts-pw-dnn', 'random', 'greedy']
+MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'mcts-pw-dnn', 'random', 'greedy', 'a0c']
 parser = argparse.ArgumentParser()
 parser.add_argument("--algorithm", type=str, default='mcts-pw-dnn')
-parser.add_argument("--num_devices", type=int, default=10)
-parser.add_argument("--num_tasks", type=int, default=20)
-parser.add_argument("--iterations", type=int, default=15000)
+parser.add_argument("--num_devices", type=int, default=25)
+parser.add_argument("--num_tasks", type=int, default=50)
+parser.add_argument("--iterations", type=int, default=10000)
 parser.add_argument("--num_es", type=int, default=4)
 parser.add_argument("--num_bs", type=int, default=1)
 parser.add_argument("--save_empirical_plot", type=bool, default=False)
@@ -78,6 +78,9 @@ if __name__ == "__main__":
     metrics = sim.run(residual=True, optimize_for='latency_energy')
     print_memory_usage("After running simulation")
     
-    sim.metrics.plot_results(saved=False)
-    # sim.metrics.save_metrics(saved=False)
+    # first_depth_children = sim.iraf_engine.a0c.root.children
+    # for child in first_depth_children:
+    #     print(child)
+    sim.metrics.plot_results(saved=True)
+    sim.metrics.save_metrics(saved=True)
     print_memory_usage("After saving results")

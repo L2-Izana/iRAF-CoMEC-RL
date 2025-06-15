@@ -6,7 +6,7 @@ from ..core.comec_env import CoMECEnvironment
 from ..visualization.metrics import MetricsTracker
 
 TREE_STORAGE_BUDGET = 1e7 # 10 million nodes, if more than this, RAM explodes :(
-TREE_CONVERGENCE_THRESHOLD = 0.005 # lower the threshold a little bit to increase the exploration, as the mcts-pw is too powerful :), only 1001 to converge
+TREE_CONVERGENCE_THRESHOLD = 0.05 # lower the threshold a little bit to increase the exploration, as the mcts-pw is too powerful :), only 1001 to converge
 TREE_CONVERGENCE_WINDOW = 50 # the same as above
 TREE_CONVERGENCE_ITERATION_LIMIT = 1000
 
@@ -54,6 +54,7 @@ class CoMECSimulator:
             self.metrics.reset()
 
             # Main simulation loop
+            i = 0
             while True:
                 # If we've exceeded time, stop
                 if self.need_duration and self.env.event_queue and self.env.event_queue[0][0] > self.max_time:
@@ -68,7 +69,11 @@ class CoMECSimulator:
                         env_resources = self.env.get_resources_dnn(task)
                     else:
                         env_resources = self.env.get_resources(task)
-                    alphas = self.iraf_engine.get_ratios(env_resources)
+                    if self.algorithm == 'a0c':
+                        alphas = self.iraf_engine.get_ratios(env_resources)
+                        i += 1
+                    else:
+                        alphas = self.iraf_engine.get_ratios(env_resources)
                     step_args = ("_handle_request", (task, alphas, residual))
                 elif event['func_name'] == '_handle_completion':
                     total_latency = event['args'][0]['total_latency']
@@ -87,6 +92,7 @@ class CoMECSimulator:
                     self.env.base_stations
                 )
 
+            # assert i == 10, f"The fuck is calling alphas {i} times"
             # After run, backprop the tree and collect final data
             average_metrics = self.metrics.get_average_metrics()
             reward = self.get_objective_value(average_metrics, optimize_for)
@@ -164,7 +170,8 @@ class CoMECSimulator:
 
     def has_converged(self, rewards):
         if len(rewards) >= TREE_CONVERGENCE_ITERATION_LIMIT: # The tree needs lots of iterations to converge
-            return np.std(rewards[-TREE_CONVERGENCE_WINDOW:]) < TREE_CONVERGENCE_THRESHOLD
+            reward_std = np.std(rewards[-TREE_CONVERGENCE_WINDOW:])
+            return reward_std < TREE_CONVERGENCE_THRESHOLD
         return False
     
     def print_results(self, average_metrics, node_count, reward, iteration):
