@@ -13,112 +13,103 @@ import random
 from iraf_engine.mcts_pw import MIN_PW_FLOOR
 from iraf_engine.node import Node, AlphaZeroNode, Node_PW
 
+
+class A0C_Node:
+    def __init__(self, action: Tuple[float, float, float, float, float] = None, depth: int = 0, num_subactions: int = 5, parent = None):
+        self.children: List[A0C_Node] = []
+        self.parent: Optional[A0C_Node] = parent
+        self.N = 0  # Visit count
+        self.Q = 0.0  # Total value
+        self.W = 0.0  # Total weight
+        self.reward = 0.0  # Total reward   
+        self.action = action  # [bin_value1, bin_value2, bin_value3, bin_value4, bin_value5]
+        self.expanded = False
+        self.depth = depth
+        self.num_subactions = num_subactions
+
+    def is_terminal(self, total_tasks: int) -> bool:
+        return self.depth == total_tasks * self.num_subactions
+
+    # def get_node_index(self) -> Tuple[int, int]:
+    #     idx = self.depth
+    #     return idx // self.num_subactions, idx % self.num_subactions
+
+    def is_fully_expanded(self) -> bool:
+        return self.expanded
+
+    def __str__(self):
+        return f"[A0C_Node] depth={self.depth}, action={self.action}, Q={self.Q:.3f}, N={self.N}"
+    
 class A0C:
-    def __init__(self, input_dim, exploration_constant=0.8, num_subactions: int = 5, use_dnn: bool = False, k_pw: float = 1.0, alpha_pw: float = 0.5):
+    def __init__(self, input_dim, exploration_constant=0.8, num_subactions: int = 5, use_dnn: bool = False, k_pw: float = 2.0, alpha_pw: float = 0.7):
         self.c = exploration_constant
         self.num_subactions = num_subactions
         self.use_dnn = use_dnn
         self.total_nodes = 1  # Start with 1 for root node
-        self.current_node = Node_PW(depth=0)
+        self.root = A0C_Node(depth=0)
+        self.current_node = self.root
         self.k_pw = k_pw
         self.alpha_pw = alpha_pw
         
     def backprop(self, reward: float):
         """Update node statistics upward through the tree"""
         action_sequence = []
+        # assert self.current_node.depth == 10, f"This should be 10, the fuck is {self.current_node.depth}"
         while self.current_node.parent is not None:
             action_sequence.append(self.current_node.action[2])
             self.current_node.N += 1
             self.current_node.Q += reward
             self.current_node = self.current_node.parent
+        # print(action_sequence)
+        # exit()
         self.current_node.N += 1
         self.current_node.Q += reward
+        # for child in self.current_node.children:
+        #     print(child)
+
         action_sequence.reverse()
         action_sequence = np.array(action_sequence).reshape(-1, 5) 
 
 
-    def best_child(self, node: Node) -> Node:
+    def best_child(self, node: A0C_Node) -> A0C_Node:
         """Select the best child based on UCB score"""
-        def uct(child: Node):
+        def uct(child: A0C_Node):
             # For negative rewards, higher (less negative) Q/N is better
             exploitation = child.Q / (child.N + 1e-6)
             # Add exploration bonus
             exploration = self.c * np.sqrt(np.log(node.N+1) / (1+child.N))
             
             return exploitation + exploration
-        
-        def puct(child: AlphaZeroNode):
-            exploitation = child.Q / (child.N + 1e-6)
-            exploration = self.c * child.prior * np.sqrt(np.log(node.N+1)) / (1+ child.N)
-            return exploitation + exploration
-        
+                
         # print(f"Node at depth {node.depth} has {len(node.children)} children")
         assert len(node.children) > 0, f"Node {node} has no children"
         # Select best child based on UCB
-        if self.use_dnn:
-            scores = [puct(child) for child in node.children]
-        else:
-            scores = [uct(child) for child in node.children]
+        scores = [uct(child) for child in node.children]
         max_score = max(scores)
         best_indices = [i for i, score in enumerate(scores) if score == max_score]
         chosen_index = random.choice(best_indices)
         return node.children[chosen_index]
     
-    def _get_ratios_pw(self, env_resources) -> Tuple[float, float, float, float, float]:
-        ratios = np.ones(5)
-        if self._is_unexpanded(self.current_node): # This is the case of the first rollout of undiscovered node            
-            progressive_widening_floor = self._get_progressive_widening_floor(self.current_node)
-            
-            if progressive_widening_floor > self.current_node.N:
-                node = Node_()
-            # beta_distribution = self._get_beta_distribution(self.current_node)
-            # Get indices of top progressive_widening_floor bins based on beta distribution
-            beta_tensor = torch.tensor(beta_distribution)
-            top_k_indices: List[int] = torch.topk(beta_tensor, min(progressive_widening_floor, len(beta_tensor))).indices.tolist()
-            self.current_node.update_selected_bins(top_k_indices)
-            
-            # Expand the node with the top k indices
-            for j in top_k_indices:
-                depth = self.current_node.depth + 1
-                task_idx, subaction_idx = self.current_node.get_node_index()
-                child = Node_PW(action=(task_idx, subaction_idx, bins_of_subaction[j]), depth=depth, parent=self.current_node)
-                self.current_node.children.append(child)
-                self.total_nodes += 1
-            
-            # Set the node as expanded and select the best child
+    def _get_ratios_a0c(self) -> Tuple[float, float, float, float, float]:
+        progressive_widening_floor = self._get_progressive_widening_floor(self.current_node)
+        
+        if progressive_widening_floor > self.current_node.N:
+            sampled_action = self.sample_action_5d(device='cpu')
+            # task_idx, subaction_idx = self.current_node.get_node_index()
+            node = A0C_Node(action=sampled_action, depth=self.current_node.depth+1, parent=self.current_node)
+            self.current_node.children.append(node)
+            self.total_nodes += 1
             self.current_node.expanded = True
-            max_child = self.best_child(self.current_node)
-            
-            # Record the best ratio and move to the best child
-            ratios[i] = max_child.action[2]
-            self.current_node = max_child
-            assert self.current_node.depth % 5 == 0, f"Current node depth is not a multiple of 5, {self.current_node.depth}"
+            self.current_node = node
+            return tuple(sampled_action)
         else:
-            for i in range(5):
-                progressive_widening_floor = self._get_progressive_widening_floor(self.current_node)
-                if progressive_widening_floor > len(self.current_node.children):
-                    # If the number of children is less than the progressive widening floor, we need to expand the node
-                    beta_distribution = self._get_beta_distribution(self.current_node)
-                    beta_tensor = torch.tensor(beta_distribution)   
-                    top_k_indices: List[int] = torch.topk(beta_tensor, min(progressive_widening_floor, len(beta_tensor))).indices.tolist()
-                    # Expand the node with the top k indices
-                    new_bins: List[int] = self.current_node.get_unselected_bins(top_k_indices)
-                    self.current_node.update_selected_bins(top_k_indices)
-
-                    for j in new_bins:
-                        task_idx, subaction_idx = self.current_node.get_node_index()
-                        depth = self.current_node.depth + 1
-                        child = Node_PW(action=(task_idx, subaction_idx, self.bins[i][j]), depth=depth, parent=self.current_node)
-                        self.current_node.children.append(child)
-                        self.total_nodes += 1
-
-                # Select
-                max_child = self.best_child(self.current_node)
-                ratios[i] = max_child.action[2]
-                self.current_node = max_child
-        assert np.any(ratios >= 1.0) == False and np.any(ratios < 0.0) == False, f"Ratios are out of range, {ratios}"
-        return tuple(ratios)
-    
+            max_child = self.best_child(self.current_node)
+            # print(max_child.action)
+            # exit()
+            ratios = max_child.action
+            self.current_node = max_child
+            return tuple(ratios)    
+        
     def get_best_action(self):
         best_action = []
         node = self.current_node
@@ -181,16 +172,13 @@ class A0C:
 
         return len(seen)
     
-    def _is_unexpanded(self, node: Node) -> bool:
-        return node.children == []
-    
-    def _get_progressive_widening_floor(self, node: Node) -> int:
+        
+    def _get_progressive_widening_floor(self, node: A0C_Node) -> int:
         progressive_widening_floor = int(self.k_pw * (node.N ** self.alpha_pw))
         return max(progressive_widening_floor, MIN_PW_FLOOR)
-    
 
 
-    def sample_action_5d(alpha_val=2.0, beta_val=0.5, device='cpu'):
+    def sample_action_5d(self, alpha_val=2.0, beta_val=0.5, device='cpu'):
         """
         Sample a 5-dimensional action vector from independent Beta distributions.
 

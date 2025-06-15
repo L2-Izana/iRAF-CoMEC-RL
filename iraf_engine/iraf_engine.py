@@ -2,6 +2,7 @@ import numpy as np
 
 from iraf_engine.mcts import MCTS
 from iraf_engine.mcts_pw import MCTS_PW
+from iraf_engine.a0c import A0C
 
 class IraFEngine:
     def __init__(self, algorithm: str = 'mcts', input_dim=9):
@@ -16,6 +17,8 @@ class IraFEngine:
             self.mcts_pw = MCTS_PW(input_dim, use_dnn=True)
         elif self.algorithm == 'random' or self.algorithm == 'greedy':
             pass
+        elif self.algorithm == 'a0c':
+            self.a0c = A0C(input_dim)
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -29,6 +32,8 @@ class IraFEngine:
             return np.random.rand(5)
         elif self.algorithm == 'greedy':
             return np.ones(5)
+        elif self.algorithm == 'a0c':
+            return self.a0c._get_ratios_a0c()
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -37,6 +42,8 @@ class IraFEngine:
             self.mcts.backprop(reward)
         elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
             self.mcts_pw.backprop(reward)
+        elif self.algorithm == 'a0c':
+            self.a0c.backprop(reward)
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -53,6 +60,8 @@ class IraFEngine:
             return self.mcts.extract_action_probabilities()
         elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
             return self.mcts_pw.extract_action_probabilities()
+        elif self.algorithm == 'a0c':
+            return self.a0c.extract_action_probabilities()
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
     
@@ -61,6 +70,8 @@ class IraFEngine:
             return self.mcts.get_node_count()
         elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
             return self.mcts_pw.get_node_count()
+        elif self.algorithm == 'a0c':
+            return self.a0c.get_node_count()
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
