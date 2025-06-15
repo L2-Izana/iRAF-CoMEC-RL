@@ -8,7 +8,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold
 
 # ensure our env is registered
-import env  # noqa
+import comec_gym  # noqa
 
 def make_env():
     # wrap with Monitor so SB3 logs episode stats
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     log_dir = "logs/ppo_comec"
     os.makedirs(log_dir, exist_ok=True)
 
-    env = DummyVecEnv([make_env])
+    comec_gym = DummyVecEnv([make_env])
     eval_env = DummyVecEnv([make_env])
 
     # stop when mean reward > -50
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     model = PPO(
         policy="MlpPolicy",
-        env=env,
+        env=comec_gym,
         verbose=1,
         tensorboard_log=log_dir,
         batch_size=64,

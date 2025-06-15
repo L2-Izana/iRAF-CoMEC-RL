@@ -1,7 +1,7 @@
 # env/main.py
 
 import gymnasium as gym
-import env     # triggers registration
+import comec_gym     # triggers registration
 import random
 import numpy as np
 random.seed(187)
