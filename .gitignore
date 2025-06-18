@@ -189,3 +189,5 @@ pi_dataset_small/
 *.pt
 *.pth
 *.bat
+
+test_plot.py

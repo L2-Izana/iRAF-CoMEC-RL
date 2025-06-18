@@ -49,3 +49,21 @@ class Node_PW(AlphaZeroNode):
     
     def update_selected_bins(self, top_k_indices: List[int]):
         self.selected_bins = top_k_indices
+        
+class A0C_Node:
+    def __init__(self, state=None, action: Tuple[float, ...] = None, depth: int = 0, num_subactions: int = 5, parent=None):
+        self.children: List[A0C_Node] = []
+        self.parent: Optional[A0C_Node] = parent
+        self.N = 0  # Visit count
+        self.Q = 0.0
+        self.action = action
+        self.expanded = False
+        self.depth = depth
+        self.num_subactions = num_subactions
+        self.state = state
+
+    def is_terminal(self, total_tasks: int) -> bool:
+        return self.depth == total_tasks * self.num_subactions
+
+    def __str__(self):
+        return f"[A0C_Node] depth={self.depth}, action={self.action}, Q={self.Q:.3f}, N={self.N}"

@@ -5,7 +5,7 @@ from iraf_engine.mcts_pw import MCTS_PW
 from iraf_engine.a0c import A0C
 
 class IraFEngine:
-    def __init__(self, algorithm: str = 'mcts', input_dim=9):
+    def __init__(self, algorithm: str = 'mcts', input_dim=9, num_iterations=1e4):
         self.algorithm = algorithm
         if self.algorithm == 'mcts':
             self.mcts = MCTS(input_dim)
@@ -18,7 +18,7 @@ class IraFEngine:
         elif self.algorithm == 'random' or self.algorithm == 'greedy':
             pass
         elif self.algorithm == 'a0c':
-            self.a0c = A0C(input_dim)
+            self.a0c = A0C(input_dim, num_iterations=num_iterations)
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -33,7 +33,7 @@ class IraFEngine:
         elif self.algorithm == 'greedy':
             return np.ones(5)
         elif self.algorithm == 'a0c':
-            return self.a0c._get_ratios_a0c()
+            return self.a0c.get_ratios_a0c(env_resources)
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -86,4 +86,8 @@ class IraFEngine:
         else:
             return 0
     
-        
+    def get_training_dataset(self):
+        if self.algorithm == 'a0c':
+            return self.a0c.get_training_dataset()
+        else:
+            raise ValueError(f"Only A0C supports it right now")
