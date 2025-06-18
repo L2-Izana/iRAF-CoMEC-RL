@@ -1,11 +1,14 @@
 import csv
 import json
 import os
+from matplotlib import pyplot as plt
 import numpy as np
 import argparse
 import psutil
 import random
 import time
+
+import torch
 from comec_simulator.core.simulator import CoMECSimulator
 from iraf_engine.iraf_engine import IraFEngine
 from comec_simulator.core.constants import *
@@ -13,6 +16,10 @@ from comec_simulator.core.constants import *
 # Reproducibility
 random.seed(187)
 np.random.seed(187)
+torch.manual_seed(187)
+torch.cuda.manual_seed_all(187)
+
+NUM_ITERATIONS = 15000
 
 # Memory tracking function
 import os
@@ -24,10 +31,9 @@ def print_memory_usage(note=""):
 # Argument parsing
 MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'mcts-pw-dnn', 'random', 'greedy', 'a0c']
 parser = argparse.ArgumentParser()
-parser.add_argument("--algorithm", type=str, default='mcts-pw-dnn')
+parser.add_argument("--algorithm", type=str, default='a0c')
 parser.add_argument("--num_devices", type=int, default=25)
 parser.add_argument("--num_tasks", type=int, default=50)
-parser.add_argument("--iterations", type=int, default=10000)
 parser.add_argument("--num_es", type=int, default=4)
 parser.add_argument("--num_bs", type=int, default=1)
 parser.add_argument("--save_empirical_plot", type=bool, default=False)
@@ -68,7 +74,7 @@ if __name__ == "__main__":
     sim = CoMECSimulator(
         num_devices=args.num_devices,
         num_tasks=args.num_tasks,
-        iterations=args.iterations,
+        iterations=NUM_ITERATIONS,
         num_es=args.num_es,
         num_bs=args.num_bs,
         algorithm=args.algorithm
@@ -78,9 +84,31 @@ if __name__ == "__main__":
     metrics = sim.run(residual=True, optimize_for='latency_energy')
     print_memory_usage("After running simulation")
     
+    
     # first_depth_children = sim.iraf_engine.a0c.root.children
     # for child in first_depth_children:
     #     print(child)
-    sim.metrics.plot_results(saved=True)
-    sim.metrics.save_metrics(saved=True)
+    sim.metrics.plot_results(saved=False)
+    sim.metrics.save_metrics(saved=False)
+    dataset = sim.iraf_engine.get_training_dataset()
+    print(f"Dataset length: {len(dataset)}")
+
+    
+    # states = torch.stack([d['state'] for d in dataset])   # shape (N, D)
+    # mask   = torch.any(states[:, :5] != 1.0, dim=1)       # shape (N,), True if any of the first 5 ≠ 1
+    # count_diff = int(mask.sum().item())
+
+    # print(f"Entries with ≥1 of first 5 dims ≠ 1.0: {count_diff}")    # for data in dataset:
+    
+    # states = torch.stack([d['state'] for d in dataset])   # shape (N, D)
+    # env_states = states[:, :5]                             # first 5 dims
+    # means = env_states.mean(dim=1).numpy()                 # per‐sample mean
+    # env_resource_use = 1 - means
+    # # plot histogram
+    # plt.figure()
+    # plt.hist(env_resource_use, bins=30)
+    # plt.xlabel('Usage Ratio')
+    # plt.ylabel('Count')
+    # plt.title('Histogram of environment‐state usage fraction')
+    # plt.show()    
     print_memory_usage("After saving results")

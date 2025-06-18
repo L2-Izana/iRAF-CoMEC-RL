@@ -26,7 +26,7 @@ class CoMECSimulator:
         need_duration=False,
         max_time=10000,
         retry_interval=10,
-        algorithm='mcts-pw-dnn' 
+        algorithm='mcts-pw-dnn',
     ):
         self.need_duration = need_duration
         self.iterations = iterations
@@ -38,7 +38,7 @@ class CoMECSimulator:
         self.metrics = MetricsTracker(self.env.num_tasks, algorithm)
 
         # MCTS engine placeholder
-        self.iraf_engine = IraFEngine(input_dim=4+num_es+num_bs, algorithm=algorithm)
+        self.iraf_engine = IraFEngine(input_dim=4+num_es+num_bs, algorithm=algorithm, num_iterations=iterations)
         self.algorithm = algorithm
             
     def run(self, residual=True, optimize_for='latency', save_empirical_run=False):
@@ -65,7 +65,7 @@ class CoMECSimulator:
                     break
                 if event['func_name'] == '_handle_request':
                     task = event['args'][0]
-                    if 'dnn' in self.algorithm:
+                    if 'dnn' in self.algorithm or self.algorithm == 'a0c':
                         env_resources = self.env.get_resources_dnn(task)
                     else:
                         env_resources = self.env.get_resources(task)
