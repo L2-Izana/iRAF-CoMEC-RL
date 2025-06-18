@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 import matplotlib.pyplot as plt
+from torch.distributions import Beta
+from iraf_engine.dnn import A0CBetaPolicyNet
 
 # === Dataset loader ===
 class PiDataset(Dataset):
@@ -143,6 +145,41 @@ def train_policy_model(data_path, epochs=400, batch_size=32, lr=1e-3, l2_coeff=1
 
     return model
 
+
+# ---- Training Loop (Simplified KL Loss) ----
+def train_policy(policy_net, dataset_path, tau=1.0, lr=1e-3, epochs=10, batch_size=64):
+    optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
+    loss_log = []
+    dataset = torch.load(dataset_path, weights_only=True)
+
+    for epoch in range(epochs):
+        torch.random.manual_seed(epoch)  # reproducibility
+        perm = torch.randperm(len(dataset))
+        for i in range(0, len(dataset), batch_size):
+            batch = [dataset[j] for j in perm[i:i+batch_size]]
+            states = torch.stack([b['state'] for b in batch])
+            actions = torch.stack([b['action'] for b in batch])
+            log_counts = torch.log(torch.tensor([b['visit_count'] for b in batch], dtype=torch.float32)) * tau
+
+            alpha, beta = policy_net(states)
+            dist = Beta(alpha, beta)
+            log_probs = dist.log_prob(actions).sum(dim=1)
+
+            # Simple KL-inspired loss
+            loss = ((log_probs - log_counts) ** 2).mean()
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            loss_log.append(loss.item())
+
+        print(f"Epoch {epoch}: Loss = {loss.item():.4f}")
+    return loss_log
+
 # === Run ===
 if __name__ == "__main__":
-    train_policy_model("D:/Research/IoT/iRAF-CoMEC-RL/pi_dataset_small")
+    # train_policy_model("D:/Research/IoT/iRAF-CoMEC-RL/pi_dataset_small")
+    policy_net = A0CBetaPolicyNet(9)
+    train_policy(policy_net, "D:/Research/IoT/iRAF-CoMEC-RL/dataset.pt")
+    torch.save(policy_net.state_dict(), "A0C_Policy_Net.pth")

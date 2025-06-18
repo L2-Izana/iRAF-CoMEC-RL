@@ -53,6 +53,24 @@ class IRafMultiTaskDNN(nn.Module):
         probs = [out[0] for out in raw_outputs]
         return probs
 
+class A0CBetaPolicyNet(nn.Module):
+    def __init__(self, state_dim=9, hidden_dim=128):
+        super().__init__()
+        self.shared = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        self.alpha_head = nn.Linear(hidden_dim, 5)
+        self.beta_head = nn.Linear(hidden_dim, 5)
+
+    def forward(self, state):
+        x = self.shared(state)
+        alpha = F.softplus(self.alpha_head(x)) + 1e-4
+        beta = F.softplus(self.beta_head(x))  + 1e-4
+        return alpha, beta
+    
 if __name__ == "__main__":
     # Sanity check
     model = IRafMultiTaskDNN(input_dim=9, head_dims=[20, 10, 10, 10, 10])
