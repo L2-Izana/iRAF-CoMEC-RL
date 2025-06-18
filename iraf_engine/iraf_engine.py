@@ -2,10 +2,10 @@ import numpy as np
 
 from iraf_engine.mcts import MCTS
 from iraf_engine.mcts_pw import MCTS_PW
-from iraf_engine.a0c import A0C
+from iraf_engine.a0c import A0C, A0C_DNN
 
 class IraFEngine:
-    def __init__(self, algorithm: str = 'mcts', input_dim=9, num_iterations=1e4):
+    def __init__(self, algorithm: str = 'mcts', input_dim=9, num_iterations=10000):
         self.algorithm = algorithm
         if self.algorithm == 'mcts':
             self.mcts = MCTS(input_dim)
@@ -19,6 +19,8 @@ class IraFEngine:
             pass
         elif self.algorithm == 'a0c':
             self.a0c = A0C(input_dim, num_iterations=num_iterations)
+        elif self.algorithm == 'a0c-dnn':
+            self.a0c = A0C_DNN(input_dim, num_iterations=num_iterations)
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -34,6 +36,8 @@ class IraFEngine:
             return np.ones(5)
         elif self.algorithm == 'a0c':
             return self.a0c.get_ratios_a0c(env_resources)
+        elif self.algorithm == 'a0c-dnn':
+            return self.a0c.get_ratios_a0c_dnn(env_resources)
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -44,6 +48,8 @@ class IraFEngine:
             self.mcts_pw.backprop(reward)
         elif self.algorithm == 'a0c':
             self.a0c.backprop(reward)
+        elif self.algorithm == 'a0c-dnn':
+            self.a0c.backprop(reward)   
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
@@ -71,6 +77,8 @@ class IraFEngine:
         elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
             return self.mcts_pw.get_node_count()
         elif self.algorithm == 'a0c':
+            return self.a0c.get_node_count()
+        elif self.algorithm == 'a0c-dnn':
             return self.a0c.get_node_count()
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")

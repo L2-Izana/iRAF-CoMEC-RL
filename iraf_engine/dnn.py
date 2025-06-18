@@ -65,7 +65,7 @@ class A0CBetaPolicyNet(nn.Module):
         self.alpha_head = nn.Linear(hidden_dim, 5)
         self.beta_head = nn.Linear(hidden_dim, 5)
 
-    def forward(self, state):
+    def forward(self, state) -> tuple[torch.Tensor, torch.Tensor]:
         x = self.shared(state)
         alpha = F.softplus(self.alpha_head(x)) + 1e-4
         beta = F.softplus(self.beta_head(x))  + 1e-4

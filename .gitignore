@@ -191,3 +191,4 @@ pi_dataset_small/
 *.bat
 
 test_plot.py
+.vscode/

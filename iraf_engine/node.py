@@ -1,5 +1,7 @@
 from typing import Optional, Tuple, List
 
+import torch
+
 class Node:
     def __init__(self, action: Optional[Tuple[int, int, float]] = None, depth: int = 0, num_subactions: int = 5, parent = None):
         self.children: List[Node] = []
@@ -51,10 +53,10 @@ class Node_PW(AlphaZeroNode):
         self.selected_bins = top_k_indices
         
 class A0C_Node:
-    def __init__(self, state=None, action: Tuple[float, ...] = None, depth: int = 0, num_subactions: int = 5, parent=None):
+    def __init__(self, state=None, action: Optional[List[float]] = None, depth: int = 0, num_subactions: int = 5, parent=None):
         self.children: List[A0C_Node] = []
         self.parent: Optional[A0C_Node] = parent
-        self.N = 0  # Visit count
+        self.N: int = 0  # Visit count
         self.Q = 0.0
         self.action = action
         self.expanded = False
@@ -67,3 +69,28 @@ class A0C_Node:
 
     def __str__(self):
         return f"[A0C_Node] depth={self.depth}, action={self.action}, Q={self.Q:.3f}, N={self.N}"
+
+class A0C_Node_DNN(A0C_Node):
+    def __init__(
+        self,
+        state=None,
+        action: Optional[List[float]] = None,
+        prior: float = 0.0,
+        depth: int = 0,
+        num_subactions: int = 5,
+        parent=None,
+        dnn_output: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+    ):
+        super().__init__(state, action, depth, num_subactions, parent)
+        self.alphas, self.betas = dnn_output if dnn_output is not None else (None, None)
+
+    def has_dnn_output(self) -> bool:
+        return self.alphas is not None and self.betas is not None
+    
+    def __str__(self):
+        alpha_str = ', '.join(f"{a:.3f}" for a in self.alphas.tolist()) if self.alphas is not None else "None"
+        beta_str = ', '.join(f"{b:.3f}" for b in self.betas.tolist()) if self.betas is not None else "None"
+        return (
+            f"[A0C_Node_DNN] depth={self.depth}, action={self.action}, "
+            f"alphas=[{alpha_str}], betas=[{beta_str}], Q={self.Q:.3f}, N={self.N}"
+        )

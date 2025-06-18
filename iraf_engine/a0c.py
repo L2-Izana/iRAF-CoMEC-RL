@@ -1,12 +1,13 @@
-from typing import List, Tuple
+from typing import List, Tuple, Union, override
 from torch.distributions import Beta
 import torch
 
 from typing import Tuple, List
 
 import numpy as np
+from iraf_engine.dnn import A0CBetaPolicyNet
 from iraf_engine.mcts_pw import MIN_PW_FLOOR
-from iraf_engine.node import A0C_Node
+from iraf_engine.node import A0C_Node, A0C_Node_DNN
 
 ADAPTIVE_INITIAL_K = 2
 ADAPTIVE_MIN_K = 0.7
@@ -25,7 +26,7 @@ class A0C:
         exploration_constant: float = 0.8,
         num_subactions: int = 5,
         use_dnn: bool = False,
-        num_iterations: int = 1e4
+        num_iterations: int = 10000
     ):
         self.c = exploration_constant
         self.num_subactions = num_subactions
@@ -45,7 +46,7 @@ class A0C:
         self.current_node.N += 1
         self.current_node.Q += reward
 
-    def get_ratios_a0c(self, env_resources) -> Tuple[float, ...]:
+    def get_ratios_a0c(self, env_resources) -> List[float]:
         # Update tree properties
         self.global_step += 1
         self.current_node.state = env_resources
@@ -63,12 +64,12 @@ class A0C:
             self.total_nodes += 1
             self.current_node.expanded = True
             self.current_node = node
-            return tuple(action)
+            return list(action)
         # Otherwise select best
         else:
             chosen = self._best_child(self.current_node)
             self.current_node = chosen
-            return tuple(chosen.action)    
+            return chosen.action if chosen.action is not None else [0.0] * self.num_subactions    
     
     def get_best_action(self):
         best_action = []
@@ -173,3 +174,80 @@ class A0C:
         idx = int(np.argmax(scores))
         return node.children[idx]
 
+class A0C_DNN(A0C):
+    def __init__(
+        self,
+        input_dim,
+        exploration_constant: float = 0.8,
+        num_subactions: int = 5,
+        use_dnn: bool = True,
+        num_iterations: int = 10000
+    ):
+        super().__init__(input_dim, exploration_constant, num_subactions, use_dnn, num_iterations)
+        self.root = A0C_Node_DNN(depth=0)
+        self.current_node = self.root
+        self.dnn = A0CBetaPolicyNet(input_dim, hidden_dim=128)
+        state_dict = torch.load("D:/Research/IoT/iRAF-CoMEC-RL/A0C_Policy_Net_new.pth", map_location="cpu", weights_only=True)
+        self.dnn.load_state_dict(state_dict)
+        self.dnn.eval()
+    
+    
+    def get_ratios_a0c_dnn(self, env_resources) -> List[float]:
+        # Update tree properties
+        self.global_step += 1
+        self.current_node.state = env_resources
+
+        floor = self._get_progressive_widening_floor(self.current_node, is_adaptive=False, has_max_threshold=True)
+        
+        # Expand if under floor
+        if floor > len(self.current_node.children): 
+        # if floor > self.current_node.N: # STUPID DUMPSHITS, yield good results, but interesting good
+            # Get DNN output
+            if not self.current_node.has_dnn_output():
+                dnn_out = self.dnn(torch.tensor(env_resources, dtype=torch.float32)
+                                                .unsqueeze(0))
+                self.current_node.alphas, self.current_node.betas = dnn_out
+                alphas = self.current_node.alphas.squeeze(0).tolist()
+                betas = self.current_node.betas.squeeze(0).tolist()
+            else:
+                alphas, betas = self.current_node.alphas, self.current_node.betas
+            action = self._sample_action_5d_dnn(alphas, betas, device='cpu')
+            node = A0C_Node_DNN(action=action, 
+                            depth=self.current_node.depth+1, 
+                            parent=self.current_node)
+            self.current_node.children.append(node)
+            self.total_nodes += 1
+            self.current_node.expanded = True
+            self.current_node = node
+            assert len(action) == self.num_subactions, f"Expected action length {self.num_subactions}, got {len(action)}: action={action}, alphas={alphas}, betas={betas}"
+            return list(action)
+        # Otherwise select best
+        else:
+            chosen = self._best_child(self.current_node)
+            self.current_node = chosen
+            return chosen.action if chosen.action is not None else [0.0] * self.num_subactions    
+
+    def _sample_action_5d_dnn(self, alphas: Union[List[float], torch.Tensor], betas: Union[List[float], torch.Tensor], device='cpu') -> List[float]:
+        """
+        Sample a 5-dimensional action vector from independent Beta distributions.
+
+        Args:
+            alphas (list or Tensor): Alpha parameters for each of the 5 Beta distributions.
+            betas (list or Tensor): Beta parameters for each of the 5 Beta distributions.
+            device (str): Computation device ('cpu' or 'cuda').
+
+        Returns:
+            List[float]: A list of 5 sampled action values in (0, 1).
+        """
+        # Safely convert to tensor
+        alphas = torch.tensor(alphas, device=device) if not isinstance(alphas, torch.Tensor) else alphas.to(device)
+        betas  = torch.tensor(betas,  device=device) if not isinstance(betas,  torch.Tensor) else betas.to(device)
+
+        # Remove batch dim if exists
+        if alphas.dim() == 2 and alphas.size(0) == 1:
+            alphas = alphas.squeeze(0)
+            betas  = betas.squeeze(0)
+
+        dist = Beta(alphas, betas)
+        action = dist.sample().tolist()  # flat 5-element list
+        return action
