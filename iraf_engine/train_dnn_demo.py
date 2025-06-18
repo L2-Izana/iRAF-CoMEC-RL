@@ -1,4 +1,5 @@
 import os
+import random
 import numpy as np
 import torch
 import torch.nn as nn
@@ -147,16 +148,24 @@ def train_policy_model(data_path, epochs=400, batch_size=32, lr=1e-3, l2_coeff=1
 
 
 # ---- Training Loop (Simplified KL Loss) ----
-def train_policy(policy_net, dataset_path, tau=1.0, lr=1e-3, epochs=10, batch_size=64):
+def train_policy(policy_net, dataset_path, tau=1.0, lr=1e-3, epochs=100, batch_size=64):
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
     loss_log = []
     dataset = torch.load(dataset_path, weights_only=True)
 
+    # Balanced sampling
+    high_visit = [d for d in dataset if d['visit_count'] > 1]
+    low_visit  = [d for d in dataset if d['visit_count'] == 1]
+    n = len(high_visit)
+    low_visit_sample = random.sample(low_visit, min(len(low_visit), n))
+    balanced_dataset = high_visit + low_visit_sample
+    random.shuffle(balanced_dataset)
+
     for epoch in range(epochs):
         torch.random.manual_seed(epoch)  # reproducibility
-        perm = torch.randperm(len(dataset))
-        for i in range(0, len(dataset), batch_size):
-            batch = [dataset[j] for j in perm[i:i+batch_size]]
+        perm = torch.randperm(len(balanced_dataset))
+        for i in range(0, len(balanced_dataset), batch_size):
+            batch = [balanced_dataset[j] for j in perm[i:i+batch_size]]
             states = torch.stack([b['state'] for b in batch])
             actions = torch.stack([b['action'] for b in batch])
             log_counts = torch.log(torch.tensor([b['visit_count'] for b in batch], dtype=torch.float32)) * tau
@@ -175,6 +184,7 @@ def train_policy(policy_net, dataset_path, tau=1.0, lr=1e-3, epochs=10, batch_si
             loss_log.append(loss.item())
 
         print(f"Epoch {epoch}: Loss = {loss.item():.4f}")
+
     return loss_log
 
 # === Run ===
