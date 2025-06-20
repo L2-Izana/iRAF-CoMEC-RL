@@ -71,6 +71,8 @@ class CoMECEnvironment:
 
     def step(self, step_args=None):
         """Advance simulation by processing the next event"""
+        if step_args is None:
+            return
         func_name, args = step_args
         func = getattr(self, func_name)
         func(*args)

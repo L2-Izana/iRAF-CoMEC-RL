@@ -4,8 +4,8 @@ import random
 from comec_simulator.core.constants import *
 
 # Constants
-EDGE_SERVER_CPU_CAPACITY = 19.14*1e9  # cycles
-BANDWIDTH_PER_BS = 40  # MHz
+# EDGE_SERVER_CPU_CAPACITY = 19.14*1e9  # cycles
+# BANDWIDTH_PER_BS = 40  # MHz
 
 class Task:
     _counter = 0

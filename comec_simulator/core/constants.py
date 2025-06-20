@@ -3,7 +3,7 @@ CHIP_COEFFICIENT = 1e-26
 CHANNEL_NOISE_VARIANCE = 1e-5
 
 # Resource capacities
-EDGE_SERVER_CPU_CAPACITY = 19.14*1e9  # cycles
+EDGE_SERVER_CPU_CAPACITY = 12.75*1e9  # cycles
 BANDWIDTH_PER_BS = 40  # MHz
 
 # Task generation parameters
