@@ -192,6 +192,159 @@ def train_and_plot_a0c_policy(policy_net,
     plt.savefig(beta_plot_path)
     print(f"📊 Saved Beta plots to: {beta_plot_path}")
 
+
+def train_and_plot_a0c_policy_best_action(policy_net,
+                              dataset_path,
+                              tau: float = 0.5,
+                              lr: float = 1e-3,
+                              epochs: int = 100,
+                              batch_size: int = 16,
+                              lambda_entropy: float = 0.01,
+                              model_save_path: str = "best_action_A0C_Policy_Net.pth",
+                              loss_plot_path: str = "best_action_training_loss.png",
+                              beta_plot_path: str = "best_action_dnn_beta_distributions.png",
+                              num_beta_samples: int = 3):
+    optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
+    loss_log = []
+    dataset = torch.load(dataset_path, weights_only=True)
+
+    # Training loop
+    for epoch in range(epochs):
+        torch.random.manual_seed(epoch)
+        perm = torch.randperm(len(dataset))
+
+        for i in range(0, len(dataset), batch_size):
+            batch = [dataset[j] for j in perm[i:i+batch_size]]
+            states = torch.stack([b['state']   for b in batch])
+            actions= torch.stack([b['action']  for b in batch])
+            counts = torch.tensor([b['visit_count'] for b in batch], dtype=torch.float32)
+            log_counts = torch.log(counts) * tau  # log π̂ ∝ τ·log n
+
+            # forward
+            alpha, beta = policy_net(states)
+            dist = Beta(alpha, beta)
+            log_probs = dist.log_prob(actions).sum(dim=1)  # log πϕ(a|s)
+            entropy  = dist.entropy().sum(dim=1)           # H[πϕ(·|s)]
+
+            # KL loss: E[log πϕ − log π̂]
+            # approximate with samples from dataset,
+            # using REINFORCE surrogate: (log_probs - log_counts) * log_probs
+            policy_loss = ((log_probs - log_counts.detach()) * log_probs).mean()
+
+            # entropy bonus (we *maximize* entropy, so subtract it)
+            loss = policy_loss - lambda_entropy * entropy.mean()
+
+            # step
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            loss_log.append(loss.item())
+
+        print(f"Epoch {epoch:3d}  loss={loss.item():.5f}  pol={policy_loss.item():.5f}  ent={entropy.mean().item():.3f}")
+
+    # === Save the trained weights ===
+    torch.save(policy_net.state_dict(), model_save_path)
+    print(f"💾 Saved model to: {model_save_path}")
+
+    # === Plot & save loss curve ===
+    plt.figure(figsize=(8,4))
+    plt.plot(loss_log, linewidth=1)
+    plt.xlabel("Training Step")
+    plt.ylabel("Total Loss")
+    plt.title("A0C Policy Network Loss (KL + Entropy)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(loss_plot_path)
+    print(f"📉 Saved loss plot to: {loss_plot_path}")
+
+    # === Plot a few Beta(α,β) shapes ===
+    fig, axes = plt.subplots(num_beta_samples, 5, figsize=(15, 3*num_beta_samples))
+    samples = random.sample(dataset, num_beta_samples)
+    x = np.linspace(0.001, 0.999, 200)
+
+    for i, sample in enumerate(samples):
+        state = sample['state'].unsqueeze(0)
+        with torch.no_grad():
+            α, β = policy_net(state)
+        α, β = α.squeeze(0), β.squeeze(0)
+
+        for j in range(5):
+            a_, b_ = α[j].item(), β[j].item()
+            d = Beta(torch.tensor([a_]), torch.tensor([b_]))
+            y = d.log_prob(torch.tensor(x)).exp().numpy()
+            axes[i][j].plot(x, y)
+            axes[i][j].set_title(f"dim{j+1}: α={a_:.2f}, β={b_:.2f}")
+            axes[i][j].set_ylim(0, np.max(y)*1.1)
+
+    plt.tight_layout()
+    plt.savefig(beta_plot_path)
+    print(f"📊 Saved Beta plots to: {beta_plot_path}")
+
+def train_policy_pureKL(policy_net,
+                        dataset_path,
+                        tau: float = 0.5,
+                        lr: float = 1e-3,
+                        epochs: int = 100,
+                        batch_size: int = 16,
+                        model_save_path: str = "pureKL_A0C_Policy_Net.pth",
+                        loss_plot_path: str  = "pureKL_training_loss.png"):
+    optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
+    loss_log = []
+
+    # load and (optionally) filter out visit_count == 1 if you want “best‐action” only:
+    raw_data = torch.load(dataset_path, weights_only=True)
+    dataset  = [d for d in raw_data]  # or: if d['visit_count']>1
+
+    for epoch in range(epochs):
+        torch.random.manual_seed(epoch)
+        perm = torch.randperm(len(dataset))
+
+        for i in range(0, len(dataset), batch_size):
+            batch = [dataset[j] for j in perm[i:i+batch_size]]
+
+            # stack tensors
+            states = torch.stack([b['state'] for b in batch])       # (B, 9)
+            actions= torch.stack([b['action'] for b in batch])      # (B, 5)
+            counts = torch.tensor([b['visit_count'] for b in batch], dtype=torch.float32)  # (B,)
+
+            # build target log π̂(a|s)
+            log_counts = torch.log(counts) * tau                     # (B,)
+
+            # forward pass
+            alpha, beta = policy_net(states)                         # (B,5), (B,5)
+            dist        = Beta(alpha, beta)
+            logp_actions= dist.log_prob(actions).sum(dim=1)          # (B,)
+
+            # pure‐KL surrogate loss: E[(logπϕ - logπ̂) * logπϕ]
+            loss = ((logp_actions - log_counts.detach()) * logp_actions).mean()
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            loss_log.append(loss.item())
+
+        print(f"Epoch {epoch:3d}  loss={loss.item():.5f}")
+
+    # save final model weights
+    torch.save(policy_net.state_dict(), model_save_path)
+    print(f"💾 Saved model to: {model_save_path}")
+
+    # plot & save loss curve
+    plt.figure(figsize=(6,4))
+    plt.plot(loss_log, linewidth=1)
+    plt.xlabel("Training Step")
+    plt.ylabel("Pure-KL Loss")
+    plt.title("A0C Policy Pure-KL Training Loss")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(loss_plot_path)
+    print(f"📉 Saved loss plot to: {loss_plot_path}")
+
 if __name__ == "__main__":
     net = A0CBetaPolicyNet(state_dim=9)
-    train_and_plot_a0c_policy(net, "D:/Research/IoT/iRAF-CoMEC-RL/dataset.pt")
+    train_policy_pureKL(net, "D:/Research/IoT/iRAF-CoMEC-RL/dataset_final_shit.pt")
+# if __name__ == "__main__":
+#     net = A0CBetaPolicyNet(state_dim=9)
+#     train_and_plot_a0c_policy_best_action(net, "D:/Research/IoT/iRAF-CoMEC-RL/dataset_final_shit.pt")
