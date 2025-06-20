@@ -19,7 +19,7 @@ np.random.seed(187)
 torch.manual_seed(187)
 torch.cuda.manual_seed_all(187)
 
-NUM_ITERATIONS = 10000
+NUM_ITERATIONS = 15000
 
 # Memory tracking function
 import os
@@ -32,13 +32,14 @@ def print_memory_usage(note=""):
 # RANKING ALGORITHMS: a0c-static-max > a0c-static > a0c-wrong-implementation > a0c-adaptive > mcts-pw-dnn > mcts-pw > mcts-dnn > mcts > a0c-dnn
 MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'mcts-pw-dnn', 'random', 'greedy', 'a0c', 'a0c-dnn']
 parser = argparse.ArgumentParser()
-parser.add_argument("--algorithm", type=str, default='a0c-dnn')
-parser.add_argument("--num_devices", type=int, default=25)
+parser.add_argument("--algorithm", type=str, default='a0c')
+parser.add_argument("--num_devices", type=int, default=30)
 parser.add_argument("--num_tasks", type=int, default=50)
 parser.add_argument("--num_es", type=int, default=4)
 parser.add_argument("--num_bs", type=int, default=1)
 parser.add_argument("--save_empirical_plot", type=bool, default=False)
 parser.add_argument("--save_empirical_data", type=bool, default=False)
+parser.add_argument("--message", type=str, default="")
 args = parser.parse_args()
 
 # Simulation loop
@@ -89,8 +90,8 @@ if __name__ == "__main__":
     # first_depth_children = sim.iraf_engine.a0c.root.children
     # for child in first_depth_children:
     #     print(child)
-    sim.metrics.plot_results(saved=False)
-    sim.metrics.save_metrics(saved=False)
+    sim.metrics.plot_results(saved=True)
+    sim.metrics.save_metrics(saved=True, message=args.message)
     # dataset = sim.iraf_engine.get_training_dataset()
     # print(f"Dataset length: {len(dataset)}")
 

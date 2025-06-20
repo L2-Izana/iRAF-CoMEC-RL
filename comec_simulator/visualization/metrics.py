@@ -147,16 +147,22 @@ class MetricsTracker:
 
         
     def plot_results(self, saved=False):
+        
         os.makedirs(self.empirical_run_folder, exist_ok=True)
         self.plot_metrics(saved)
         self.plot_tree_iteration_step_attributes(saved)
 
-    def save_metrics(self, saved=False):
+    def save_metrics(self, saved=False, message=None):
         os.makedirs(self.empirical_run_folder, exist_ok=True)
-        for key, value in self.metrics.items():
-            np.save(f"{self.empirical_run_folder}/{key}.npy", value)
-        np.save(f"{self.empirical_run_folder}/node_counts.npy", self.node_counts)
-        np.save(f"{self.empirical_run_folder}/rewards.npy", self.rewards)
+        if saved:
+            print(f"Saving metrics to {self.empirical_run_folder}")
+            for key, value in self.metrics.items():
+                np.save(f"{self.empirical_run_folder}/{key}.npy", value)
+            np.save(f"{self.empirical_run_folder}/node_counts.npy", self.node_counts)
+            np.save(f"{self.empirical_run_folder}/rewards.npy", self.rewards)
+            if message:
+                with open(f"{self.empirical_run_folder}/message.txt", 'w') as f:
+                    f.write(message)
         
     def get_latest_empirical_run(self) -> int:
         if os.path.exists(EMPERICAL_RUN_FOLDER):

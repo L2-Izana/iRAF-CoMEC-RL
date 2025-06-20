@@ -14,10 +14,10 @@ ADAPTIVE_MIN_K = 0.7
 ADAPTIVE_INITIAL_ALPHA = 0.8
 ADAPTIVE_MIN_ALPHA = 0.3
 
-K_PW = 2
+K_PW = 2 # Great idea, but not so great results, maybe it's due to the so low count in the end of tree
 ALPHA_PW = 0.7
 
-MAX_PW_FLOOR = 20 # Limit exploration, not really need right now, as the adaptive pw parameters lower exploration thirst of the agent 
+MAX_PW_FLOOR = 20 # Limit exploration, empirically best results, need further testing and proof 
 
 class A0C:
     def __init__(
@@ -187,7 +187,7 @@ class A0C_DNN(A0C):
         self.root = A0C_Node_DNN(depth=0)
         self.current_node = self.root
         self.dnn = A0CBetaPolicyNet(input_dim, hidden_dim=128)
-        state_dict = torch.load("D:/Research/IoT/iRAF-CoMEC-RL/A0C_Policy_Net_new.pth", map_location="cpu", weights_only=True)
+        state_dict = torch.load("D:/Research/IoT/iRAF-CoMEC-RL/best_action_A0C_Policy_Net.pth", map_location="cpu", weights_only=True)
         self.dnn.load_state_dict(state_dict)
         self.dnn.eval()
     
@@ -197,7 +197,7 @@ class A0C_DNN(A0C):
         self.global_step += 1
         self.current_node.state = env_resources
 
-        floor = self._get_progressive_widening_floor(self.current_node, is_adaptive=False, has_max_threshold=True)
+        floor = self._get_progressive_widening_floor(self.current_node, is_adaptive=False, has_max_threshold=False)
         
         # Expand if under floor
         if floor > len(self.current_node.children): 
