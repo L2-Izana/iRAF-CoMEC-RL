@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from comec_simulator.core.constants import DNN_INPUT_DIM
+
 class SubActionHead(nn.Module):
     """
     A small MLP head for one sub-action. Takes the shared embedding as input
@@ -54,7 +56,7 @@ class IRafMultiTaskDNN(nn.Module):
         return probs
 
 class A0CBetaPolicyNet(nn.Module):
-    def __init__(self, state_dim=9, hidden_dim=128):
+    def __init__(self, state_dim=DNN_INPUT_DIM, hidden_dim=128):
         super().__init__()
         self.shared = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),

@@ -5,37 +5,18 @@ import torch
 from typing import Tuple, List
 
 import numpy as np
+from comec_simulator.core.constants import ADAPTIVE_INITIAL_ALPHA, ADAPTIVE_INITIAL_K, ADAPTIVE_MIN_ALPHA, ADAPTIVE_MIN_K, ALPHA_PW, ALPHA_VAL, BETA_VAL, EXPLORATION_BONUS, K_PW, MAX_PW_FLOOR, NUM_ITERATIONS
 from iraf_engine.dnn import A0CBetaPolicyNet
 from iraf_engine.mcts_pw import MIN_PW_FLOOR
 from iraf_engine.node import A0C_Node, A0C_Node_DNN
 
-ADAPTIVE_INITIAL_K = 2
-ADAPTIVE_MIN_K = 0.7
-ADAPTIVE_INITIAL_ALPHA = 0.8
-ADAPTIVE_MIN_ALPHA = 0.3
-
-K_PW = 2 # Great idea, but not so great results, maybe it's due to the so low count in the end of tree
-ALPHA_PW = 0.7
-
-MAX_PW_FLOOR = 20 # Limit exploration, empirically best results, need further testing and proof 
 
 class A0C:
-    def __init__(
-        self,
-        input_dim,
-        exploration_constant: float = 0.8,
-        num_subactions: int = 5,
-        use_dnn: bool = False,
-        num_iterations: int = 10000
-    ):
-        self.c = exploration_constant
-        self.num_subactions = num_subactions
-        self.use_dnn = use_dnn
+    def __init__(self):
         self.total_nodes = 1
         self.root = A0C_Node(depth=0)
         self.current_node = self.root
         self.global_step = 0 # used for adaptive
-        self.num_iterations = num_iterations
         
     def backprop(self, reward: float):
         """Update node statistics upward through the tree"""
@@ -46,7 +27,7 @@ class A0C:
         self.current_node.N += 1
         self.current_node.Q += reward
 
-    def get_ratios_a0c(self, env_resources) -> List[float]:
+    def get_ratios_a0c(self, env_resources) -> Tuple[float, ...]:
         # Update tree properties
         self.global_step += 1
         self.current_node.state = env_resources
@@ -64,12 +45,13 @@ class A0C:
             self.total_nodes += 1
             self.current_node.expanded = True
             self.current_node = node
-            return list(action)
+            return tuple(action)
         # Otherwise select best
         else:
             chosen = self._best_child(self.current_node)
             self.current_node = chosen
-            return chosen.action if chosen.action is not None else [0.0] * self.num_subactions    
+            assert chosen.action is not None, f"Chosen node {chosen} has no action, wrong tree logic"
+            return tuple(chosen.action)
     
     def get_best_action(self):
         best_action = []
@@ -122,7 +104,7 @@ class A0C:
         return len(seen)
     
     
-    def _sample_action_5d(self, alpha_val=2.0, beta_val=0.5, device='cpu') -> List[float]:
+    def _sample_action_5d(self, device='cpu') -> List[float]:
         """
         Sample a 5-dimensional action vector from independent Beta distributions.
 
@@ -134,8 +116,8 @@ class A0C:
         Returns:
             torch.Tensor: A tensor of shape (5,) containing the sampled action.
         """
-        alpha = torch.full((5,), alpha_val, device=device)
-        beta = torch.full((5,), beta_val, device=device)
+        alpha = torch.full((5,), ALPHA_VAL, device=device)
+        beta = torch.full((5,), BETA_VAL, device=device)
         dist = Beta(alpha, beta)
         action = dist.sample().tolist()
         return action
@@ -160,7 +142,7 @@ class A0C:
         then hold at their minimum values.
         """
 
-        t = min(self.global_step / self.num_iterations, 1.0)
+        t = min(self.global_step / NUM_ITERATIONS, 1.0)
         k = ADAPTIVE_INITIAL_K * (1 - t) + ADAPTIVE_MIN_K * t
         alpha = ADAPTIVE_INITIAL_ALPHA * (1 - t) + ADAPTIVE_MIN_ALPHA * t
         return k, alpha
@@ -168,25 +150,18 @@ class A0C:
     def _best_child(self, node: A0C_Node) -> A0C_Node:
         def uct(child: A0C_Node):
             exploitation = child.Q / child.N
-            exploration = self.c * np.sqrt(np.log(node.N) / child.N )
+            exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N) / child.N )
             return exploitation + exploration
         scores = [uct(child) for child in node.children]
         idx = int(np.argmax(scores))
         return node.children[idx]
 
 class A0C_DNN(A0C):
-    def __init__(
-        self,
-        input_dim,
-        exploration_constant: float = 0.8,
-        num_subactions: int = 5,
-        use_dnn: bool = True,
-        num_iterations: int = 10000
-    ):
-        super().__init__(input_dim, exploration_constant, num_subactions, use_dnn, num_iterations)
+    def __init__(self):
+        super().__init__()
         self.root = A0C_Node_DNN(depth=0)
-        self.current_node = self.root
-        self.dnn = A0CBetaPolicyNet(input_dim, hidden_dim=128)
+        self.current_node: A0C_Node_DNN = self.root
+        self.dnn = A0CBetaPolicyNet()
         state_dict = torch.load("D:/Research/IoT/iRAF-CoMEC-RL/best_action_A0C_Policy_Net.pth", map_location="cpu", weights_only=True)
         self.dnn.load_state_dict(state_dict)
         self.dnn.eval()
@@ -201,7 +176,6 @@ class A0C_DNN(A0C):
         
         # Expand if under floor
         if floor > len(self.current_node.children): 
-        # if floor > self.current_node.N: # STUPID DUMPSHITS, yield good results, but interesting good
             # Get DNN output
             if not self.current_node.has_dnn_output():
                 dnn_out = self.dnn(torch.tensor(env_resources, dtype=torch.float32)
@@ -211,6 +185,8 @@ class A0C_DNN(A0C):
                 betas = self.current_node.betas.squeeze(0).tolist()
             else:
                 alphas, betas = self.current_node.alphas, self.current_node.betas
+            if alphas is None or betas is None:
+                raise ValueError("alphas and betas must not be None before sampling action.")
             action = self._sample_action_5d_dnn(alphas, betas, device='cpu')
             node = A0C_Node_DNN(action=action, 
                             depth=self.current_node.depth+1, 
@@ -219,7 +195,6 @@ class A0C_DNN(A0C):
             self.total_nodes += 1
             self.current_node.expanded = True
             self.current_node = node
-            assert len(action) == self.num_subactions, f"Expected action length {self.num_subactions}, got {len(action)}: action={action}, alphas={alphas}, betas={betas}"
             return list(action)
         # Otherwise select best
         else:

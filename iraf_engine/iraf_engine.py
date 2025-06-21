@@ -18,9 +18,9 @@ class IraFEngine:
         elif self.algorithm == 'random' or self.algorithm == 'greedy':
             pass
         elif self.algorithm == 'a0c':
-            self.a0c = A0C(input_dim, num_iterations=num_iterations)
+            self.a0c = A0C()
         elif self.algorithm == 'a0c-dnn':
-            self.a0c = A0C_DNN(input_dim, num_iterations=num_iterations)
+            self.a0c = A0C_DNN()
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 

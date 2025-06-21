@@ -21,7 +21,7 @@ class MetricsTracker:
         self.node_counts = []
         self.rewards = []
         self.empirical_run_number = self.get_latest_empirical_run() + 1
-        self.empirical_run_folder = f"{EMPERICAL_RUN_FOLDER}/number_{self.empirical_run_number}_{total_tasks}_{algorithm}"
+        self.empirical_run_folder = f"{EMPERICAL_RUN_FOLDER}/number_{self.empirical_run_number}_{algorithm}"
         
     def reset(self):
         self.metrics = {
@@ -60,6 +60,8 @@ class MetricsTracker:
         return {'avg_latency': 0, 'avg_energy': 0}
 
     def record_tree_iteration_step_attributes(self, node_count, reward):
+        assert node_count >= 0, f"Node count should be non-negative, got {node_count}"
+        assert reward >= 0, f"Reward should be non-negative, got {reward}"
         self.node_counts.append(node_count)
         self.rewards.append(reward)
 
@@ -78,7 +80,10 @@ class MetricsTracker:
         plt.subplot(2, 1, 2)
         rewards = np.array(self.rewards)
         window = 100
-
+        
+        assert np.all(rewards > 0), "Rewards should be positive, at indexes: " + \
+            ', '.join(str(i) for i, r in enumerate(rewards) if r <= 0)
+        
         if len(rewards) >= window:
             sma = np.convolve(rewards, np.ones(window)/window, mode='valid')
             std = np.array([np.std(rewards[i-window:i]) for i in range(window, len(rewards) + 1)])
@@ -98,6 +103,7 @@ class MetricsTracker:
         plt.tight_layout()
 
         if saved:
+            os.makedirs(self.empirical_run_folder, exist_ok=True)
             plt.savefig(f"{self.empirical_run_folder}/tree_iteration_step_attributes.png")
         else:
             plt.show()
@@ -135,20 +141,15 @@ class MetricsTracker:
 
         plt.tight_layout()
         
-        # Create results directory if it doesn't exist
-        if not os.path.exists(EMPERICAL_RUN_FOLDER):
-            os.makedirs(EMPERICAL_RUN_FOLDER)
-            
-        # Save plot
         if saved:
+            # Create results directory if it doesn't exist
+            os.makedirs(self.empirical_run_folder, exist_ok=True)
             plt.savefig(f'{self.empirical_run_folder}/metrics.png')
         else:
             plt.show()
 
         
-    def plot_results(self, saved=False):
-        
-        os.makedirs(self.empirical_run_folder, exist_ok=True)
+    def plot_results(self, saved=False):        
         self.plot_metrics(saved)
         self.plot_tree_iteration_step_attributes(saved)
 

@@ -1,27 +1,22 @@
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import torch
 
-from typing import Optional, Tuple, List
-
 import numpy as np
-import torch.nn as nn
-from comec_simulator.core.components import BaseStation, EdgeServer, Task
+from comec_simulator.core.constants import DNN_INPUT_DIM
 from iraf_engine.dnn import IRafMultiTaskDNN
 import random
 from iraf_engine.node import Node, AlphaZeroNode
 
 class MCTS:
-    def __init__(self, input_dim, exploration_constant=0.8, num_subactions: int = 5, bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10], use_dnn: bool = False):
-        self.c = exploration_constant
-        self.num_subactions = num_subactions
+    def __init__(self, bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10], use_dnn: bool = False):
         self.bins_per_subaction_list = bins_per_subaction_list
         self.use_dnn = use_dnn
-        self.total_nodes = 1  # Start with 1 for root node
+        self.total_nodes = 1  
         print(f"Using DNN: {use_dnn}")
         if use_dnn:
             print("Loading DNN model")
-            self.model = IRafMultiTaskDNN(input_dim=input_dim, head_dims=[20, 10, 10, 10, 10])
+            self.model = IRafMultiTaskDNN(input_dim=DNN_INPUT_DIM, head_dims=bins_per_subaction_list)
             self.model.load_state_dict(torch.load("D:\\Research\\IoT\\iRAF-CoMEC-RL\\trained_iraf_policy_small.pt", weights_only=True))
             self.root = AlphaZeroNode(depth=0)
             self.model.eval()
