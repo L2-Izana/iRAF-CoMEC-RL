@@ -1,19 +1,14 @@
+from typing import List
 import numpy as np
 import random
 
 from comec_simulator.core.constants import *
 
-# Constants
-# EDGE_SERVER_CPU_CAPACITY = 19.14*1e9  # cycles
-# BANDWIDTH_PER_BS = 40  # MHz
-
 class Task:
     _counter = 0
-    def __init__(self, device, bs, data_size, cpu_cycles, device_cpu_freq, channel_gain, max_latency, arrival_time):
+    def __init__(self, data_size, cpu_cycles, device_cpu_freq, channel_gain, max_latency, arrival_time):
         self.task_id = Task._counter
         Task._counter += 1
-        self.device = device
-        self.bs = bs
         self.data_size = data_size
         self.cpu_cycles = cpu_cycles
         self.device_cpu_freq = device_cpu_freq
@@ -39,10 +34,36 @@ class MobileDevice:
         cpu_cycles = random.uniform(MIN_CPU_CYCLES, MAX_CPU_CYCLES)  # cycles 
         channel_gain = random.uniform(MIN_CHANNEL_GAIN, MAX_CHANNEL_GAIN)
         max_latency = DEFAULT_MAX_LATENCY  # ms
-        return Task(self, self.base_station, data_size,
+        return Task(data_size,
                    cpu_cycles, self.device_cpu_freq,
                    channel_gain, max_latency, arrival_time)
 
+class BaseStation:
+    _counter = 0
+    
+    def __init__(self):
+        self.bs_id = BaseStation._counter
+        BaseStation._counter += 1
+        self.total_bandwidth = BANDWIDTH_PER_BS
+        self.available_bandwidth = BANDWIDTH_PER_BS
+
+    def allocate_bandwidth(self, amount):
+        if 0 < amount <= self.available_bandwidth:
+            self.available_bandwidth -= amount
+            return True
+        return False
+    
+    def release_bandwidth(self, amount):
+        self.available_bandwidth = min(
+            self.total_bandwidth,
+            self.available_bandwidth + amount)
+    
+    def reset(self):
+        self.available_bandwidth = self.total_bandwidth
+
+    def __str__(self):
+        return f"BaseStation(bs_id={self.bs_id}, total_bandwidth={self.total_bandwidth}MHz, available_bandwidth={self.available_bandwidth}MHz)" 
+    
 class EdgeServer:
     _counter = 0
     
@@ -68,29 +89,68 @@ class EdgeServer:
     def __str__(self):
         return f"EdgeServer(server_id={self.server_id}, cpu_capacity={self.cpu_capacity}, available_cpu={self.available_cpu})"
 
-class BaseStation:
+class TaskRequest:
+    def __init__(self, task, mobile_device, base_station, arrival_time):
+        self.task = task
+        self.mobile_device = mobile_device
+        self.base_station = base_station
+        self.arrival_time = arrival_time
+        
+class Cluster:
     _counter = 0
     
-    def __init__(self, edge_servers=None):
-        self.bs_id = BaseStation._counter
-        BaseStation._counter += 1
-        self.total_bandwidth = BANDWIDTH_PER_BS
-        self.available_bandwidth = BANDWIDTH_PER_BS
-        self.edge_servers = edge_servers or []
+    def __init__(self):
+        self.cluster_id = Cluster._counter
+        Cluster._counter += 1
+        self.base_station = BaseStation()
+        self.mobile_devices = self._init_mobile_devices(self.base_station)
+        self.num_devices = len(self.mobile_devices)
 
-    def allocate_bandwidth(self, amount):
-        if 0 < amount <= self.available_bandwidth:
-            self.available_bandwidth -= amount
-            return True
-        return False
+    def reset_bs_bandwidth(self):
+        self.base_station.reset()
     
-    def release_bandwidth(self, amount):
-        self.available_bandwidth = min(
-            self.total_bandwidth,
-            self.available_bandwidth + amount)
+    def _init_mobile_devices(self, base_station):
+        num_devices = random.randint(MIN_NUM_DEVICES, MAX_NUM_DEVICES)
+        return [MobileDevice(base_station) for _ in range(num_devices)]
     
-    def reset(self):
-        self.available_bandwidth = self.total_bandwidth
-
     def __str__(self):
-        return f"BaseStation(bs_id={self.bs_id}, total_bandwidth={self.total_bandwidth}MHz, available_bandwidth={self.available_bandwidth}MHz)" 
+        return f"Cluster(cluster_id={self.cluster_id}, base_station={self.base_station}, num_devices={len(self.mobile_devices)})"
+    
+class ClusterManager:
+    def __init__(self):
+        self.clusters: List[Cluster] = [Cluster() for _ in range(NUM_OF_CLUSTERS)]
+        self.task_requests: List[TaskRequest] = self._generate_tasks()
+        
+    def reset_bs_bandwidth(self):
+        for cluster in self.clusters:
+            cluster.reset_bs_bandwidth()
+    
+    def get_base_stations(self) -> List[BaseStation]:
+        return [cluster.base_station for cluster in self.clusters]
+    
+    def _generate_tasks(self):
+        task_requests: List[TaskRequest] = []
+        for cluster in self.clusters:
+            for device in cluster.mobile_devices:
+                arrival_time: float = random.uniform(0, ARRIVAL_WINDOW)
+                task: Task = device.generate_task(arrival_time)
+                task_request: TaskRequest = TaskRequest(task=task, mobile_device=device, base_station=cluster.base_station, arrival_time=arrival_time)
+                task_requests.append(task_request)
+        return task_requests
+    
+class EdgeServerCluster:
+    
+    def __init__(self):
+        self.servers: List[EdgeServer] = [EdgeServer() for _ in range(NUM_EDGE_SERVERS)]
+        
+    def reset(self):
+        for server in self.servers:
+            server.reset()
+            
+    def get_primary_collab_servers(self) -> tuple[EdgeServer, EdgeServer]:
+        """Get the primary (the strongest) and collaborative (the 2nd strongest) edge servers based on available CPU."""
+        primary: EdgeServer = max(self.servers, key=lambda s: s.available_cpu)
+        others: List[EdgeServer] = [s for s in self.servers if s is not primary]
+        collab: EdgeServer = max(others, key=lambda s: s.available_cpu) 
+        assert primary is not None and collab is not None, "Primary and Collaborative server cannot be None"
+        return primary, collab
