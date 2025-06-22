@@ -9,10 +9,15 @@ import random
 from iraf_engine.node import Node, AlphaZeroNode
 
 class MCTS:
-    def __init__(self, bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10], use_dnn: bool = False):
+    def __init__(
+        self, 
+        bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10], 
+        use_dnn: bool = False
+        ):
         self.bins_per_subaction_list = bins_per_subaction_list
         self.use_dnn = use_dnn
         self.total_nodes = 1  
+        
         print(f"Using DNN: {use_dnn}")
         if use_dnn:
             print("Loading DNN model")

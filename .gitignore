@@ -189,6 +189,6 @@ pi_dataset_small/
 *.pt
 *.pth
 *.bat
-
+*.pkl
 test_plot.py
 .vscode/

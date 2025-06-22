@@ -15,15 +15,14 @@ from iraf_engine.mcts import MCTS
 MIN_PW_FLOOR = 3
 
 class MCTS_PW(MCTS):
-    def __init__(self, input_dim, exploration_constant=0.8, num_subactions: int = 5,
-                 bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10],
-                 use_dnn: bool = False, k_pw: float = 1.0, alpha_pw: float = 0.5):
-        # Initialize base MCTS
-        super().__init__(input_dim=input_dim,
-                         exploration_constant=exploration_constant,
-                         num_subactions=num_subactions,
-                         bins_per_subaction_list=bins_per_subaction_list,
-                         use_dnn=use_dnn)
+    def __init__(
+        self, 
+        bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10],
+        use_dnn: bool = False, 
+        k_pw: float = 1.0, 
+        alpha_pw: float = 0.5
+        ):
+        super().__init__(bins_per_subaction_list=bins_per_subaction_list, use_dnn=use_dnn)
         # Progressive Widening parameters
         self.k_pw = k_pw
         self.alpha_pw = alpha_pw

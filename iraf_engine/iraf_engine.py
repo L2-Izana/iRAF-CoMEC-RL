@@ -5,16 +5,22 @@ from iraf_engine.mcts_pw import MCTS_PW
 from iraf_engine.a0c import A0C, A0C_DNN
 
 class IraFEngine:
-    def __init__(self, algorithm: str = 'mcts', input_dim=9, num_iterations=10000):
-        self.algorithm = algorithm
-        if self.algorithm == 'mcts':
-            self.mcts = MCTS(input_dim)
-        elif self.algorithm == 'mcts-dnn':
-            self.mcts = MCTS(input_dim, use_dnn=True)
-        elif self.algorithm == 'mcts-pw':
-            self.mcts_pw = MCTS_PW(input_dim, use_dnn=False)
-        elif self.algorithm == 'mcts-pw-dnn':
-            self.mcts_pw = MCTS_PW(input_dim, use_dnn=True)
+    """
+    Unified interface for selection algorithms:
+    - MCTS / MCTS-DNN
+    - MCTS-PW / MCTS-PW-DNN
+    - A0C / A0C-DNN
+    - Random
+    - Greedy
+    """
+    def __init__(self, algorithm):
+        self.algorithm = algorithm.lower()
+        self.use_dnn = self.algorithm.endswith('-dnn')
+        self.base = self.algorithm[:-4] if self.use_dnn else self.algorithm
+        if self.base == 'mcts':
+            self.model = MCTS(use_dnn=self.use_dnn)
+        elif self.base == 'mcts-pw':
+            self.model = MCTS_PW(use_dnn=self.use_dnn)
         elif self.algorithm == 'random' or self.algorithm == 'greedy':
             pass
         elif self.algorithm == 'a0c':
