@@ -5,8 +5,8 @@ CHANNEL_NOISE_VARIANCE = 1e-5
 # Resource capacities
 EDGE_SERVER_CPU_CAPACITY = 19.14*1e9  # cycles
 BANDWIDTH_PER_BS = 40  # MHz
-NUM_EDGE_SERVERS= 4
-NUM_OF_CLUSTERS = 1
+NUM_EDGE_SERVERS= 12
+NUM_OF_CLUSTERS = 4
 
 # Task generation parameters
 MIN_DATA_SIZE = 0.2  # MB
@@ -22,8 +22,8 @@ ARRIVAL_WINDOW = 10000 # ms
 DEVICE_CPU_FREQ = 3e8  # Hz
 MIN_TRANSMIT_POWER = 32  # mW
 MAX_TRANSMIT_POWER = 197  # mW 
-MIN_NUM_DEVICES = 30
-MAX_NUM_DEVICES = 30 # Quite excessive, but we need to test the limits of the simulator
+MIN_NUM_DEVICES = 50
+MAX_NUM_DEVICES = 50 # Quite excessive, but we need to test the limits of the simulator
 
 # Tree parameters
 TREE_STORAGE_BUDGET = 1e7 # 10 million nodes, if more than this, RAM explodes :(
@@ -31,7 +31,7 @@ TREE_CONVERGENCE_THRESHOLD = 0.01
 TREE_CONVERGENCE_WINDOW = 100
 EXPLORATION_BONUS = 0.8
 NUM_SUBACTIONS = 5
-NUM_ITERATIONS = 15000
+NUM_ITERATIONS = 10000
 
 # A0C Algorithm parameters
 ADAPTIVE_INITIAL_K = 2
@@ -46,4 +46,5 @@ BETA_VAL = 0.5
 
 # DNN parameters
 DNN_INPUT_DIM = 4 + NUM_EDGE_SERVERS + 1  # 4 for task properties, num_es for edge servers, 1 for base station
+
 

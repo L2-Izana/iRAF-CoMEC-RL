@@ -1,3 +1,4 @@
+import pickle
 from typing import List, Tuple, Union, override
 from torch.distributions import Beta
 import torch
@@ -10,6 +11,27 @@ from iraf_engine.dnn import A0CBetaPolicyNet
 from iraf_engine.mcts_pw import MIN_PW_FLOOR
 from iraf_engine.node import A0C_Node, A0C_Node_DNN
 
+
+with open(r"D:\Research\IoT\iRAF-CoMEC-RL\beta_mixture_params_subaction_0.pkl", "rb") as f:
+    mixture_params_0 = pickle.load(f)
+with open(r"D:\Research\IoT\iRAF-CoMEC-RL\beta_mixture_params_subaction_1.pkl", "rb") as f:
+    mixture_params_1 = pickle.load(f)
+with open(r"D:\Research\IoT\iRAF-CoMEC-RL\beta_mixture_params_subaction_3.pkl", "rb") as f:
+    mixture_params_3 = pickle.load(f)
+with open(r"D:\Research\IoT\iRAF-CoMEC-RL\beta_mixture_params_subaction_4.pkl", "rb") as f:
+    mixture_params_4 = pickle.load(f)
+
+# Simple Beta params for subaction 2
+with open(r"D:\Research\IoT\iRAF-CoMEC-RL\beta_params_subaction_2.pkl", "rb") as f:
+    beta_params_2 = pickle.load(f)  # (alpha, beta)
+
+# Organize into dict for easy lookup
+mixture_params = {
+    0: mixture_params_0,
+    1: mixture_params_1,
+    3: mixture_params_3,
+    4: mixture_params_4,
+}
 
 class A0C:
     def __init__(self):
@@ -104,24 +126,52 @@ class A0C:
         return len(seen)
     
     
-    def _sample_action_5d(self, device='cpu') -> List[float]:
-        """
-        Sample a 5-dimensional action vector from independent Beta distributions.
+    # def _sample_action_5d(self, device='cpu') -> List[float]:
+    #     """
+    #     Sample a 5-dimensional action vector from independent Beta distributions.
 
-        Args:
-            alpha_val (float): The alpha parameter for each Beta distribution.
-            beta_val (float): The beta parameter for each Beta distribution.
-            device (str): The device to perform computation on (e.g., 'cpu' or 'cuda').
+    #     Args:
+    #         alpha_val (float): The alpha parameter for each Beta distribution.
+    #         beta_val (float): The beta parameter for each Beta distribution.
+    #         device (str): The device to perform computation on (e.g., 'cpu' or 'cuda').
 
-        Returns:
-            torch.Tensor: A tensor of shape (5,) containing the sampled action.
-        """
-        alpha = torch.full((5,), ALPHA_VAL, device=device)
-        beta = torch.full((5,), BETA_VAL, device=device)
-        dist = Beta(alpha, beta)
-        action = dist.sample().tolist()
-        return action
+    #     Returns:
+    #         torch.Tensor: A tensor of shape (5,) containing the sampled action.
+    #     """
+    #     alpha = torch.full((5,), ALPHA_VAL, device=device)
+    #     beta = torch.full((5,), BETA_VAL, device=device)
+    #     dist = Beta(alpha, beta)
+    #     action = dist.sample().tolist()
+    #     return action
     
+    def _sample_action_5d(self, device='cpu') -> list:
+        """
+        Sample a 5-dimensional action vector from pre-fitted Beta / Beta-mixture distributions.
+        """
+        action = torch.zeros(5, device=device)
+        
+        for i in range(5):
+            if i == 2:
+                # Subaction 2: single Beta
+                a, b = beta_params_2
+                dist = Beta(torch.tensor(a, device=device),
+                            torch.tensor(b, device=device))
+                action[i] = dist.sample()
+            else:
+                # Mixture of Betas for subactions 0,1,3,4
+                params = mixture_params[i]              # list of (w, α, β)
+                weights = torch.tensor([w for w,_,_ in params],
+                                    device=device)
+                weights = weights / weights.sum()       # normalize
+                # choose one component
+                idx = torch.multinomial(weights, 1).item()
+                _, a, b = params[idx]
+                dist = Beta(torch.tensor(a, device=device),
+                            torch.tensor(b, device=device))
+                action[i] = dist.sample()
+        assert all(0 < action) and all(action <= 1), \
+            f"Sampled action {action} has values outside [0, 1] range"
+        return action.tolist()
     
     def _get_progressive_widening_floor(self, node: A0C_Node, is_adaptive=False, has_max_threshold=True) -> int:
         if is_adaptive:
