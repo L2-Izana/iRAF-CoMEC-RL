@@ -29,7 +29,7 @@ class CoMECSimulator:
         self.metrics = MetricsTracker(self.env.get_num_tasks(), algorithm)
 
         # MCTS engine placeholder
-        self.iraf_engine = IraFEngine(input_dim=DNN_INPUT_DIM, algorithm=algorithm, num_iterations=iterations)
+        self.iraf_engine = IraFEngine(algorithm=algorithm)
         self.algorithm = algorithm
             
     def run(self, optimize_for, save_empirical_run=False):
@@ -112,6 +112,44 @@ class CoMECSimulator:
             with open(f'{optimize_for}_metrics_{self.algorithm}_{time.time()}.txt', 'w') as f:
                 np.savetxt(f, metrics)
         return all_metrics
+    
+    def eval(self, optimize_for):
+        """Run simulation for `iterations` episodes and return metrics."""
+        all_metrics = []
+        self.env.reset(reset_tasks=True)
+
+        while True:
+            if not self.env.event_queue:
+                break
+            event = self.env.pop_event()
+            step_args = None
+            assert event is not None, "Event should not be None at this point"
+            if event['func'] == self.env.handle_request:
+                task = event['args'][0]
+                alphas = self.iraf_engine.a0c.get_eval_ratios()
+                step_args = (self.env.handle_request, (task, alphas))
+            elif event['func'] == self.env.handle_completion:
+                total_latency = event['args'][0]['total_latency']
+                total_energy = event['args'][0]['total_energy']
+                # print(f"E: {total_energy} | L: {total_latency}")
+                self.metrics.record_task_completion(total_latency, total_energy)
+                step_args = (self.env.handle_completion, event['args'])
+
+            if step_args:
+                self.env.step(step_args)
+
+            # Collect intermediate system metrics
+            current_time = self.env.time
+            self.metrics.record_metrics(
+                current_time,
+                self.env.get_edge_servers(),
+                self.env.get_base_stations()
+            )
+
+        # After run, backprop the tree and collect final data
+        average_metrics = self.metrics.get_average_metrics()
+        
+        return average_metrics
     
     def run_with_best_action(self, best_action):
         """Final simulation run for task and env condition recording"""

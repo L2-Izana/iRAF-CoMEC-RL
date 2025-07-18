@@ -27,11 +27,12 @@ def print_memory_usage(note=""):
     print(f"[MEMORY] {note} - RSS: {mem:.2f} MB")
 
 # Argument parsing
-# RANKING ALGORITHMS: a0c-static-max (proportionally increasing) > a0c-static > a0c-wrong-implementation > a0c-adaptive > mcts-pw-dnn > mcts-pw > mcts-dnn > mcts > a0c-dnn
+# RANKING ALGORITHMS: a0c-mod > a0c-static-max (proportionally increasing) > a0c-static > a0c-wrong-implementation > a0c-adaptive > mcts-pw-dnn > mcts-pw > mcts-dnn > mcts > a0c-dnn
 MODELS = ['mcts', 'mcts-dnn', 'mcts-pw', 'mcts-pw-dnn', 'random', 'greedy', 'a0c', 'a0c-dnn']
 parser = argparse.ArgumentParser()
 parser.add_argument("--algorithm", type=str, default='a0c')
 parser.add_argument("--message", type=str, default="")
+parser.add_argument("--mode", type=str, default="train", choices=["train", "eval"])
 args = parser.parse_args()
 
 # Simulation loop
@@ -64,34 +65,16 @@ if __name__ == "__main__":
     )
     print_memory_usage("After creating simulator")
 
-    metrics = sim.run(optimize_for='latency_energy')
-    print_memory_usage("After running simulation")
-    
-    
-    # first_depth_children = sim.iraf_engine.a0c.root.children
-    # for child in first_depth_children:
-    #     print(child)
-    sim.metrics.plot_results(saved=True)
-    sim.metrics.save_metrics(saved=True, message=args.message)
-    # dataset = sim.iraf_engine.get_training_dataset()
-    # print(f"Dataset length: {len(dataset)}")
-
-    
-    # states = torch.stack([d['state'] for d in dataset])   # shape (N, D)
-    # mask   = torch.any(states[:, :5] != 1.0, dim=1)       # shape (N,), True if any of the first 5 ≠ 1
-    # count_diff = int(mask.sum().item())
-
-    # print(f"Entries with ≥1 of first 5 dims ≠ 1.0: {count_diff}")    # for data in dataset:
-    
-    # states = torch.stack([d['state'] for d in dataset])   # shape (N, D)
-    # env_states = states[:, :5]                             # first 5 dims
-    # means = env_states.mean(dim=1).numpy()                 # per‐sample mean
-    # env_resource_use = 1 - means
-    # # plot histogram
-    # plt.figure()
-    # plt.hist(env_resource_use, bins=30)
-    # plt.xlabel('Usage Ratio')
-    # plt.ylabel('Count')
-    # plt.title('Histogram of environment‐state usage fraction')
-    # plt.show()    
-    print_memory_usage("After saving results")
+    if args.mode == "train":
+        metrics = sim.run(optimize_for='latency_energy')
+        print_memory_usage("After running simulation")
+        
+        sim.metrics.plot_results(saved=False)
+        sim.metrics.save_metrics(saved=True, message=args.message)
+        print_memory_usage("After saving results")
+    else:
+        metrics = sim.eval(optimize_for='latency_energy')
+        # sim.metrics.plot_results(saved=True)
+        # sim.metrics.save_metrics(saved=True, message=args.message)
+        print(metrics)
+        # print(metrics)
