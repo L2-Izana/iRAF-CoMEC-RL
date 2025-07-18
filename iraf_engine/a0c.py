@@ -49,7 +49,7 @@ class A0C:
         self.current_node.N += 1
         self.current_node.Q += reward
 
-    def get_ratios_a0c(self, env_resources) -> Tuple[float, ...]:
+    def get_ratios(self, env_resources) -> Tuple[float, ...]:
         # Update tree properties
         self.global_step += 1
         self.current_node.state = env_resources
@@ -125,31 +125,13 @@ class A0C:
 
         return len(seen)
     
-    
-    # def _sample_action_5d(self, device='cpu') -> List[float]:
-    #     """
-    #     Sample a 5-dimensional action vector from independent Beta distributions.
-
-    #     Args:
-    #         alpha_val (float): The alpha parameter for each Beta distribution.
-    #         beta_val (float): The beta parameter for each Beta distribution.
-    #         device (str): The device to perform computation on (e.g., 'cpu' or 'cuda').
-
-    #     Returns:
-    #         torch.Tensor: A tensor of shape (5,) containing the sampled action.
-    #     """
-    #     alpha = torch.full((5,), ALPHA_VAL, device=device)
-    #     beta = torch.full((5,), BETA_VAL, device=device)
-    #     dist = Beta(alpha, beta)
-    #     action = dist.sample().tolist()
-    #     return action
-    
-    def _sample_action_5d(self, device='cpu') -> list:
+    def get_eval_ratios(self, device='cpu') -> Tuple[float, ...]:
         """
         Sample a 5-dimensional action vector from pre-fitted Beta / Beta-mixture distributions.
+        Returns a tuple of floats.
         """
         action = torch.zeros(5, device=device)
-        
+
         for i in range(5):
             if i == 2:
                 # Subaction 2: single Beta
@@ -163,17 +145,36 @@ class A0C:
                 weights = torch.tensor([w for w,_,_ in params],
                                     device=device)
                 weights = weights / weights.sum()       # normalize
-                # choose one component
                 idx = torch.multinomial(weights, 1).item()
                 _, a, b = params[idx]
                 dist = Beta(torch.tensor(a, device=device),
                             torch.tensor(b, device=device))
                 action[i] = dist.sample()
+
         assert all(0 < action) and all(action <= 1), \
             f"Sampled action {action} has values outside [0, 1] range"
-        return action.tolist()
+        
+        return tuple(float(x) for x in action)    
     
-    def _get_progressive_widening_floor(self, node: A0C_Node, is_adaptive=False, has_max_threshold=True) -> int:
+    def _sample_action_5d(self, device='cpu') -> List[float]:
+        """
+        Sample a 5-dimensional action vector from independent Beta distributions.
+
+        Args:
+            alpha_val (float): The alpha parameter for each Beta distribution.
+            beta_val (float): The beta parameter for each Beta distribution.
+            device (str): The device to perform computation on (e.g., 'cpu' or 'cuda').
+
+        Returns:
+            torch.Tensor: A tensor of shape (5,) containing the sampled action.
+        """
+        alpha = torch.full((5,), ALPHA_VAL, device=device)
+        beta = torch.full((5,), BETA_VAL, device=device)
+        dist = Beta(alpha, beta)
+        action = dist.sample().tolist()
+        return action
+        
+    def _get_progressive_widening_floor(self, node: A0C_Node, is_adaptive, has_max_threshold) -> int:
         if is_adaptive:
             k, alpha = self._get_adaptive_pw_params()
             floor = int(k * (node.N ** alpha))
@@ -215,6 +216,7 @@ class A0C_DNN(A0C):
         state_dict = torch.load("D:/Research/IoT/iRAF-CoMEC-RL/best_action_A0C_Policy_Net.pth", map_location="cpu", weights_only=True)
         self.dnn.load_state_dict(state_dict)
         self.dnn.eval()
+        self.num_subactions = 5  # Fix: define number of subactions
     
     
     def get_ratios_a0c_dnn(self, env_resources) -> List[float]:
@@ -249,6 +251,8 @@ class A0C_DNN(A0C):
         # Otherwise select best
         else:
             chosen = self._best_child(self.current_node)
+            if not isinstance(chosen, A0C_Node_DNN):
+                chosen = A0C_Node_DNN(action=chosen.action, depth=chosen.depth, parent=chosen.parent)
             self.current_node = chosen
             return chosen.action if chosen.action is not None else [0.0] * self.num_subactions    
 

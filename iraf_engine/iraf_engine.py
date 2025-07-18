@@ -21,43 +21,25 @@ class IraFEngine:
             self.model = MCTS(use_dnn=self.use_dnn)
         elif self.base == 'mcts-pw':
             self.model = MCTS_PW(use_dnn=self.use_dnn)
-        elif self.algorithm == 'random' or self.algorithm == 'greedy':
-            pass
         elif self.algorithm == 'a0c':
-            self.a0c = A0C()
+            self.model = A0C()
         elif self.algorithm == 'a0c-dnn':
             self.a0c = A0C_DNN()
+        elif self.algorithm == 'random' or self.algorithm == 'greedy':
+            pass
         else:
             raise ValueError(f"Algorithm {self.algorithm} not supported")
 
-
     def get_ratios(self, env_resources):
-        if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
-            return self.mcts.get_ratios(env_resources)
-        elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
-            return self.mcts_pw.get_ratios(env_resources)
-        elif self.algorithm == 'random':
+        if self.algorithm == 'random':
             return np.random.rand(5)
         elif self.algorithm == 'greedy':
             return np.ones(5)
-        elif self.algorithm == 'a0c':
-            return self.a0c.get_ratios_a0c(env_resources)
-        elif self.algorithm == 'a0c-dnn':
-            return self.a0c.get_ratios_a0c_dnn(env_resources)
         else:
-            raise ValueError(f"Algorithm {self.algorithm} not supported")
+            return self.model.get_ratios(env_resources)
 
     def backprop(self, reward):
-        if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
-            self.mcts.backprop(reward)
-        elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
-            self.mcts_pw.backprop(reward)
-        elif self.algorithm == 'a0c':
-            self.a0c.backprop(reward)
-        elif self.algorithm == 'a0c-dnn':
-            self.a0c.backprop(reward)   
-        else:
-            raise ValueError(f"Algorithm {self.algorithm} not supported")
+        self.model.backprop(reward)
 
     def get_best_action(self):
         if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
