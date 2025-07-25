@@ -39,6 +39,7 @@ class CoMECSimulator:
         for _ in range(self.iterations):            
             if self._check_tree_stop_condition(self.iraf_engine.get_node_count(), self.metrics.get_average_metrics(), self._get_objective_value(self.metrics.get_average_metrics(), optimize_for), _):
                 break
+            trajectory = {}
 
             # Restart environment and metrics
             self.env.reset(reset_tasks=False)
@@ -47,9 +48,6 @@ class CoMECSimulator:
             # Main simulation loop
             i = 0
             while True:
-                # If we've exceeded time, stop
-                # if self.env.event_queue and self.env.event_queue[0][0] > self.max_time:
-                # Finish the simulation if no events are left
                 if not self.env.event_queue:
                     break
                 event = self.env.pop_event()
@@ -57,18 +55,20 @@ class CoMECSimulator:
                 assert event is not None, "Event should not be None at this point"
                 if event['func'] == self.env.handle_request:
                     task = event['args'][0]
-                    if 'dnn' in self.algorithm or self.algorithm == 'a0c':
+                    if 'dnn' in self.algorithm:
                         env_resources = self.env.get_resources_dnn(task)
                     else:
                         env_resources = self.env.get_resources(task)
+                    task_id = env_resources['task'].task_id
                     alphas = self.iraf_engine.get_ratios(env_resources)
+                    trajectory[task_id] = [env_resources, alphas]
                     step_args = (self.env.handle_request, (task, alphas))
                 elif event['func'] == self.env.handle_completion:
                     total_latency = event['args'][0]['total_latency']
                     total_energy = event['args'][0]['total_energy']
                     self.metrics.record_task_completion(total_latency, total_energy)
                     step_args = (self.env.handle_completion, event['args'])
-
+                    trajectory[event['args'][0]['task'].task_id].append((total_latency, total_energy))
                 if step_args:
                     self.env.step(step_args)
 
@@ -80,12 +80,22 @@ class CoMECSimulator:
                     self.env.get_base_stations()
                 )
 
+            arrival_time_sorted_trajectory = sorted(trajectory.items(), key=lambda x: x[1][0]['task'].arrival_time)
+            # print(arrival_time_sorted_trajectory[0])
+            # exit(1)
+            for task_id, step in arrival_time_sorted_trajectory:
+                env_resources, alphas, metrics = step[0], step[1], step[2]
+                if len(step) != 3:
+                    print("Bullshit")
+                    exit(1)
+                # print(f"Task {task_id} arrived at {env_resources['task'].arrival_time}, allocated with alphas: {alphas}, latency: {metrics[0]}, energy: {metrics[1]}")
+            # time.sleep(1)  # Sleep to allow for any async operations to complete
             # After run, backprop the tree and collect final data
             average_metrics = self.metrics.get_average_metrics()
             reward = self._get_objective_value(average_metrics, optimize_for)
-            
+            avg_lat_eng_arr = [-np.average(step[1][-1]) for step in arrival_time_sorted_trajectory]
             assert reward > 0, f"Reward should be positive, got {reward}"
-            self.iraf_engine.backprop(-reward) # Make it negative to minimize the objective value
+            self.iraf_engine.backprop(-reward, avg_lat_eng_arr) # Make it negative to minimize the objective value
             node_count = self.iraf_engine.get_node_count()
             
             # Record tree iteration step attributes
@@ -126,7 +136,7 @@ class CoMECSimulator:
             assert event is not None, "Event should not be None at this point"
             if event['func'] == self.env.handle_request:
                 task = event['args'][0]
-                alphas = self.iraf_engine.a0c.get_eval_ratios()
+                alphas = self.iraf_engine.model.get_eval_ratios()
                 step_args = (self.env.handle_request, (task, alphas))
             elif event['func'] == self.env.handle_completion:
                 total_latency = event['args'][0]['total_latency']
@@ -203,8 +213,8 @@ class CoMECSimulator:
         energy_str = f"Average Energy: {average_metrics['avg_energy']:.2f}"
         nodes_str = f"Node Count: {node_count}"
         reward_str = f"Reward: {reward:.2f}"
-        dnn_call_count = self.iraf_engine.get_dnn_call_count()
-        dnn_call_count_str = f"DNN Call Count: {dnn_call_count}"
+        # dnn_call_count = self.iraf_engine.get_dnn_call_count()
+        # dnn_call_count_str = f"DNN Call Count: {dnn_call_count}"
         # Print the box
         print(f"\n╔{top_bottom}╗")
         print(f"{side}{iteration_str:^40}{side}")
@@ -213,8 +223,8 @@ class CoMECSimulator:
         print(f"{side}{energy_str:^40}{side}")
         print(f"{side}{nodes_str:^40}{side}")
         print(f"{side}{reward_str:^40}{side}")
-        if dnn_call_count > 0:
-            print(f"{side}{dnn_call_count_str:^40}{side}")
+        # if dnn_call_count > 0:
+        #     print(f"{side}{dnn_call_count_str:^40}{side}")
         print(f"╚{top_bottom}╝\n")
 
     def _check_tree_stop_condition(self, node_count, average_metrics, reward, _):

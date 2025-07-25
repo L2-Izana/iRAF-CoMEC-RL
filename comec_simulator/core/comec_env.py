@@ -195,3 +195,6 @@ class CoMECEnvironment:
         alloc['primary'].release_cpu(alloc['p_cpu'])
         if alloc['collab']:
             alloc['collab'].release_cpu(alloc['c_cpu'])
+        task = alloc['task']
+        # print(f"Task {task.task_id} arrived at {task.arrival_time}, completed at {self.time}")
+        
