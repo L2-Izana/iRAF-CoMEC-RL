@@ -56,8 +56,9 @@ class A0C_Node:
     def __init__(self, state=None, action: Optional[List[float]] = None, depth: int = 0, num_subactions: int = 5, parent=None):
         self.children: List[A0C_Node] = []
         self.parent: Optional[A0C_Node] = parent
-        self.N: int = 0  # Visit count
+        self.N: int = 0 
         self.Q = 0.0
+        self.W = 0.0  
         self.action = action
         self.expanded = False
         self.depth = depth

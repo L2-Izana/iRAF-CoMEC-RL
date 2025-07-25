@@ -1,4 +1,5 @@
 import pickle
+import time
 from typing import List, Tuple, Union, override
 from torch.distributions import Beta
 import torch
@@ -6,7 +7,7 @@ import torch
 from typing import Tuple, List
 
 import numpy as np
-from comec_simulator.core.constants import ADAPTIVE_INITIAL_ALPHA, ADAPTIVE_INITIAL_K, ADAPTIVE_MIN_ALPHA, ADAPTIVE_MIN_K, ALPHA_PW, ALPHA_VAL, BETA_VAL, EXPLORATION_BONUS, K_PW, MAX_PW_FLOOR, NUM_ITERATIONS
+from comec_simulator.core.constants import ADAPTIVE_INITIAL_ALPHA, ADAPTIVE_INITIAL_K, ADAPTIVE_MIN_ALPHA, ADAPTIVE_MIN_K, ALPHA_PW, ALPHA_VAL, BETA_VAL, DISCOUNT_FACTOR, EXPLORATION_BONUS, K_PW, MAX_PW_FLOOR, NUM_ITERATIONS
 from iraf_engine.dnn import A0CBetaPolicyNet
 from iraf_engine.mcts_pw import MIN_PW_FLOOR
 from iraf_engine.node import A0C_Node, A0C_Node_DNN
@@ -40,15 +41,31 @@ class A0C:
         self.current_node = self.root
         self.global_step = 0 # used for adaptive
         
-    def backprop(self, reward: float):
+    def backprop_accumulative(self, reward: float):
         """Update node statistics upward through the tree"""
-        while self.current_node.parent is not None:
+        while self.current_node is not None and self.current_node.parent is not None:
             self.current_node.N += 1
             self.current_node.Q += reward
             self.current_node = self.current_node.parent
-        self.current_node.N += 1
-        self.current_node.Q += reward
+        if self.current_node is not None:
+            self.current_node.N += 1
+            self.current_node.Q += reward
 
+    def backprop_discounted_average(self, reward: float, avg_lat_eng_arr: List[float] = None):
+        # Fuck the reward, use the average immediate reward arr
+        num_tasks = len(avg_lat_eng_arr)
+        for i in range(-2, -num_tasks-1, -1):
+            avg_lat_eng_arr[i] = avg_lat_eng_arr[i] + DISCOUNT_FACTOR*avg_lat_eng_arr[i+1]
+        for i in range(-1, -num_tasks-1, -1):
+            if self.current_node is None:
+                raise AssertionError("Bullshit")
+            self.current_node.N += 1
+            self.current_node.W += avg_lat_eng_arr[i]
+            self.current_node.Q = self.current_node.W / self.current_node.N
+            self.current_node = self.current_node.parent
+        self.current_node.N += 1
+        
+        
     def get_ratios(self, env_resources) -> Tuple[float, ...]:
         # Update tree properties
         self.global_step += 1
@@ -199,8 +216,10 @@ class A0C:
         return k, alpha
     
     def _best_child(self, node: A0C_Node) -> A0C_Node:
+        # This stupid shit, fuck up, if discounted avg, do not divide Q, if accumulate, divide by N
         def uct(child: A0C_Node):
-            exploitation = child.Q / child.N
+            # exploitation = child.Q / child.N # For accumulative 
+            exploitation = child.Q # For discounted avg
             exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N) / child.N )
             return exploitation + exploration
         scores = [uct(child) for child in node.children]

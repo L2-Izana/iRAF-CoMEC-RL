@@ -38,49 +38,45 @@ class IraFEngine:
         else:
             return self.model.get_ratios(env_resources)
 
-    def backprop(self, reward):
-        self.model.backprop(reward)
+    def backprop(self, reward, avg_lat_eng_arr=None):
+        self.model.backprop_discounted_average(reward, avg_lat_eng_arr)
+        # self.model.backprop_accumulative(reward)
+    # def get_best_action(self):
+    #     if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
+    #         return self.mcts.get_best_action()
+    #     elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
+    #         return self.mcts_pw.get_best_action()
+    #     else:
+    #         raise ValueError(f"Algorithm {self.algorithm} not supported")
 
-    def get_best_action(self):
-        if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
-            return self.mcts.get_best_action()
-        elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
-            return self.mcts_pw.get_best_action()
-        else:
-            raise ValueError(f"Algorithm {self.algorithm} not supported")
-
-    def extract_action_probabilities(self):
-        if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
-            return self.mcts.extract_action_probabilities()
-        elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
-            return self.mcts_pw.extract_action_probabilities()
-        elif self.algorithm == 'a0c':
-            return self.a0c.extract_action_probabilities()
-        else:
-            raise ValueError(f"Algorithm {self.algorithm} not supported")
+    # def extract_action_probabilities(self):
+    #     if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
+    #         return self.mcts.extract_action_probabilities()
+    #     elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
+    #         return self.mcts_pw.extract_action_probabilities()
+    #     elif self.algorithm == 'a0c':
+    #         return self.a0c.extract_action_probabilities()
+    #     else:
+    #         raise ValueError(f"Algorithm {self.algorithm} not supported")
     
     def get_node_count(self):
-        if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
-            return self.mcts.get_node_count()
-        elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
-            return self.mcts_pw.get_node_count()
-        elif self.algorithm == 'a0c':
-            return self.a0c.get_node_count()
-        elif self.algorithm == 'a0c-dnn':
-            return self.a0c.get_node_count()
-        else:
-            raise ValueError(f"Algorithm {self.algorithm} not supported")
-
-    def get_dnn_call_count(self):
-        if 'dnn' in self.algorithm:
-            if self.algorithm == 'mcts-pw-dnn':
-                return self.mcts_pw.dnn_call_count
-            elif self.algorithm == 'mcts-dnn':
-                return self.mcts.dnn_call_count
-            else:
-                return 0    
-        else:
-            return 0
+        assert hasattr(self.model,  'get_node_count'), f"Algorithm {self.algorithm} does not support node count retrieval"
+        return self.model.get_node_count()
+    
+    def get_best_node(self):
+        assert hasattr(self.model, 'get_best_node'), f"Algorithm {self.algorithm} does not support best node retrieval"
+        return self.model.get_best_node()
+    
+    # def get_dnn_call_count(self):
+    #     if 'dnn' in self.algorithm:
+    #         if self.algorithm == 'mcts-pw-dnn':
+    #             return self.mcts_pw.dnn_call_count
+    #         elif self.algorithm == 'mcts-dnn':
+    #             return self.mcts.dnn_call_count
+    #         else:
+    #             return 0    
+    #     else:
+    #         return 0
     
     def get_training_dataset(self):
         if self.algorithm == 'a0c':
