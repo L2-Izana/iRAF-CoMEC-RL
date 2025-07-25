@@ -69,7 +69,7 @@ if __name__ == "__main__":
         metrics = sim.run(optimize_for='latency_energy')
         print_memory_usage("After running simulation")
         
-        sim.metrics.plot_results(saved=False)
+        sim.metrics.plot_results(saved=True)
         sim.metrics.save_metrics(saved=True, message=args.message)
         print_memory_usage("After saving results")
     else:
