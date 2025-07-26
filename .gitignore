@@ -192,3 +192,4 @@ pi_dataset_small/
 *.pkl
 test_plot.py
 .vscode/
+outputs/

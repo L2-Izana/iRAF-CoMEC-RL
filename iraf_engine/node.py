@@ -6,7 +6,7 @@ class Node:
     def __init__(self, action: Optional[Tuple[int, int, float]] = None, depth: int = 0, num_subactions: int = 5, parent = None):
         self.children: List[Node] = []
         self.parent: Optional[Node] = parent
-        self.N = 0  # Visit count
+        self.N: int = 0  # Visit count
         self.Q = 0.0  # Total value
         self.W = 0.0  # Total weight
         self.reward = 0.0  # Total reward   

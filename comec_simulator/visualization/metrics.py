@@ -170,12 +170,7 @@ class MetricsTracker:
             if message:
                 with open(f"{self.empirical_run_folder}/message.txt", 'w') as f:
                     f.write(message)
-
-            # Save config as YAML
-            if config is not None:
-                with open(f"{self.empirical_run_folder}/config.yaml", 'w') as f:
-                    OmegaConf.save(config=config, f=f.name)
-        
+                            
     def get_latest_empirical_run(self) -> int:
         if os.path.exists(EMPERICAL_RUN_FOLDER):
             folders = [f for f in os.listdir(EMPERICAL_RUN_FOLDER) 

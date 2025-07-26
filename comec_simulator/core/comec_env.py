@@ -58,17 +58,11 @@ class CoMECEnvironment:
             'args': args,
         }
 
-    def get_resources(self, task_request: TaskRequest):
-        return {
-            'bs': task_request.base_station,
-            'edge_servers': self.edge_cluster.servers,
-            'task': task_request.task,
-        }
-
-    def get_resources_dnn(self, task_request: TaskRequest):
+    def get_resources(self, task_request: TaskRequest) -> dict[str, object]:
         bs = task_request.base_station
         task = task_request.task
-
+        edge_servers = self.edge_cluster.servers
+        
         # Get base station and edge server resources
         bs_resource = np.array([bs.available_bandwidth / bs.total_bandwidth])
         es_resource = np.array([es.available_cpu / es.cpu_capacity for es in self.edge_cluster.servers])
@@ -82,7 +76,14 @@ class CoMECEnvironment:
             f"A vector of state for DNN has to match the length of {resource_dnn_len}, not {len(resources_dnn)}"
         assert np.all(resources_dnn >= 0), \
             f"All elements in resources_dnn must be non-negative, found {resources_dnn[resources_dnn < 0]}"
-        return resources_dnn
+
+        return {
+            'task': task,
+            'bs': bs,
+            'edge_servers': edge_servers,
+            'resources_dnn': resources_dnn,
+        }
+
         
     def allocate_resources(self, task_request: TaskRequest, alphas):
         """
@@ -196,5 +197,4 @@ class CoMECEnvironment:
         if alloc['collab']:
             alloc['collab'].release_cpu(alloc['c_cpu'])
         task = alloc['task']
-        # print(f"Task {task.task_id} arrived at {task.arrival_time}, completed at {self.time}")
         

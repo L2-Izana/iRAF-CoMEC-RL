@@ -54,21 +54,23 @@ class CoMECSimulator:
                 step_args = None
                 assert event is not None, "Event should not be None at this point"
                 if event['func'] == self.env.handle_request:
-                    task = event['args'][0]
-                    if 'dnn' in self.algorithm:
-                        env_resources = self.env.get_resources_dnn(task)
-                    else:
-                        env_resources = self.env.get_resources(task)
-                    task_id = env_resources['task'].task_id
+                    task_request = event['args'][0]
+                    env_resources = self.env.get_resources(task_request)
+                    task = env_resources['task']
+                    task_id = getattr(task, 'task_id', None)
+                    if task_id is None:
+                        raise RuntimeError(f"Failed to retrieve 'task_id' from task object: {task}")
                     alphas = self.iraf_engine.get_ratios(env_resources)
                     trajectory[task_id] = [env_resources, alphas]
-                    step_args = (self.env.handle_request, (task, alphas))
+                    step_args = (self.env.handle_request, (task_request, alphas))
+                
                 elif event['func'] == self.env.handle_completion:
                     total_latency = event['args'][0]['total_latency']
                     total_energy = event['args'][0]['total_energy']
                     self.metrics.record_task_completion(total_latency, total_energy)
                     step_args = (self.env.handle_completion, event['args'])
                     trajectory[event['args'][0]['task'].task_id].append((total_latency, total_energy))
+                
                 if step_args:
                     self.env.step(step_args)
 

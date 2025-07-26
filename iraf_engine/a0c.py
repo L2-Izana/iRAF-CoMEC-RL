@@ -35,7 +35,7 @@ mixture_params = {
 }
 
 class A0C:
-    def __init__(self, has_max_threshold, max_pw_floor, discount_factor):
+    def __init__(self, has_max_threshold, max_pw_floor, discount_factor, use_dnn): # use_dnn is still in experimentation
         self.total_nodes = 1
         self.root: A0C_Node = A0C_Node(depth=0)
         self.current_node: A0C_Node = self.root
@@ -71,7 +71,8 @@ class A0C:
         
         # Update root node if still accessible
         if self.current_node is not None:
-            self.current_node.N += 1
+            self.current_node.N += 1    
+              
         
         
     def get_ratios(self, env_resources) -> Tuple[float, ...]:
@@ -81,9 +82,7 @@ class A0C:
 
         floor = self._get_progressive_widening_floor(self.current_node)
         
-        # Expand if under floor
         if floor > len(self.current_node.children): 
-        # if floor > self.current_node.N: # STUPID DUMPSHITS, yield good results, but interesting good
             action = self._sample_action_5d(device='cpu')
             node = A0C_Node(action=action, 
                             depth=self.current_node.depth+1, 
@@ -93,7 +92,6 @@ class A0C:
             self.current_node.expanded = True
             self.current_node = node
             return tuple(action)
-        # Otherwise select best
         else:
             chosen = self._best_child(self.current_node)
             self.current_node = chosen
@@ -223,7 +221,7 @@ class A0C:
         alpha = ADAPTIVE_INITIAL_ALPHA * (1 - t) + ADAPTIVE_MIN_ALPHA * t
         return k, alpha
     
-    def _best_child(self, node: A0C_Node) -> A0C_Node:
+    def _best_child(self, node: A0C_Node) -> A0C_Node:        
         def uct(child: A0C_Node):
             exploitation = child.Q 
             exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N) / child.N )
@@ -231,6 +229,24 @@ class A0C:
         scores = [uct(child) for child in node.children]
         idx = int(np.argmax(scores))
         return node.children[idx]
+    
+    # def _best_child(self, node: A0C_Node) -> A0C_Node:
+    #     # Optional: Estimate scale factor from the current children
+    #     q_values = [child.Q for child in node.children]
+    #     q_max = max(q_values)
+    #     q_min = min(q_values)
+    #     q_range = q_max - q_min if q_max != q_min else 1.0  # Avoid div by zero
+
+    #     def uct(child: A0C_Node):
+    #         # Scale Q to [0, 1]
+    #         exploitation = (child.Q - q_min) / q_range
+    #         exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N + 1) / (child.N + 1))
+    #         return exploitation + exploration
+
+    #     scores = [uct(child) for child in node.children]
+    #     idx = int(np.argmax(scores))
+    #     return node.children[idx]
+
 
 class A0C_DNN(A0C):
     def __init__(self):
