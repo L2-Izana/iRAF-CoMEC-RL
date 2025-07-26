@@ -2,6 +2,7 @@ import os
 import time
 import matplotlib.pyplot as plt
 import numpy as np
+from omegaconf import OmegaConf
 
 EMPERICAL_RUN_FOLDER = "empirical_runs"
 
@@ -153,17 +154,27 @@ class MetricsTracker:
         self.plot_metrics(saved)
         self.plot_tree_iteration_step_attributes(saved)
 
-    def save_metrics(self, saved=False, message=None):
+    def save_metrics(self, saved=False, message=None, config=None):
         os.makedirs(self.empirical_run_folder, exist_ok=True)
+
         if saved:
             print(f"Saving metrics to {self.empirical_run_folder}")
+
+            # Save metrics arrays
             for key, value in self.metrics.items():
                 np.save(f"{self.empirical_run_folder}/{key}.npy", value)
             np.save(f"{self.empirical_run_folder}/node_counts.npy", self.node_counts)
             np.save(f"{self.empirical_run_folder}/rewards.npy", self.rewards)
+
+            # Save message
             if message:
                 with open(f"{self.empirical_run_folder}/message.txt", 'w') as f:
                     f.write(message)
+
+            # Save config as YAML
+            if config is not None:
+                with open(f"{self.empirical_run_folder}/config.yaml", 'w') as f:
+                    OmegaConf.save(config=config, f=f.name)
         
     def get_latest_empirical_run(self) -> int:
         if os.path.exists(EMPERICAL_RUN_FOLDER):

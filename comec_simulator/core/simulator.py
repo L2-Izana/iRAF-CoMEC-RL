@@ -1,15 +1,10 @@
 import time
 import numpy as np
 
-from comec_simulator.core.constants import DNN_INPUT_DIM
+from comec_simulator.core.constants import *
 from iraf_engine.iraf_engine import IraFEngine
 from ..core.comec_env import CoMECEnvironment
 from ..visualization.metrics import MetricsTracker
-
-TREE_STORAGE_BUDGET = 1e7 # 10 million nodes, if more than this, RAM explodes :(
-TREE_CONVERGENCE_THRESHOLD = 0.05 # lower the threshold a little bit to increase the exploration, as the mcts-pw is too powerful :), only 1001 to converge
-TREE_CONVERGENCE_WINDOW = 50 # the same as above
-TREE_CONVERGENCE_ITERATION_LIMIT = 1000
 
 class CoMECSimulator:
     """
@@ -20,16 +15,21 @@ class CoMECSimulator:
     def __init__(
         self,
         iterations,
-        algorithm='a0c',
+        algorithm,
+        num_edge_servers,
+        num_clusters,
+        cpu_capacity,
+        num_devices_per_cluster,
+        cfg # Detailed configuration for a specific algorithm
     ):
         self.iterations = iterations
 
         # Create environment and metrics
-        self.env = CoMECEnvironment()
+        self.env = CoMECEnvironment(num_edge_servers=num_edge_servers, num_clusters=num_clusters, cpu_capacity=cpu_capacity, num_devices_per_cluster=num_devices_per_cluster)
         self.metrics = MetricsTracker(self.env.get_num_tasks(), algorithm)
 
         # MCTS engine placeholder
-        self.iraf_engine = IraFEngine(algorithm=algorithm)
+        self.iraf_engine = IraFEngine(algorithm, cfg)
         self.algorithm = algorithm
             
     def run(self, optimize_for, save_empirical_run=False):

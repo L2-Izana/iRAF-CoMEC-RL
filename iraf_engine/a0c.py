@@ -7,7 +7,7 @@ import torch
 from typing import Tuple, List
 
 import numpy as np
-from comec_simulator.core.constants import ADAPTIVE_INITIAL_ALPHA, ADAPTIVE_INITIAL_K, ADAPTIVE_MIN_ALPHA, ADAPTIVE_MIN_K, ALPHA_PW, ALPHA_VAL, BETA_VAL, DISCOUNT_FACTOR, EXPLORATION_BONUS, K_PW, MAX_PW_FLOOR, NUM_ITERATIONS
+from comec_simulator.core.constants import *
 from iraf_engine.dnn import A0CBetaPolicyNet
 from iraf_engine.mcts_pw import MIN_PW_FLOOR
 from iraf_engine.node import A0C_Node, A0C_Node_DNN
@@ -35,11 +35,15 @@ mixture_params = {
 }
 
 class A0C:
-    def __init__(self):
+    def __init__(self, has_max_threshold, max_pw_floor, discount_factor):
         self.total_nodes = 1
         self.root = A0C_Node(depth=0)
         self.current_node = self.root
         self.global_step = 0 # used for adaptive
+        self.is_adaptive = False  # Set to True if you want to use adaptive progressive widening (still in experimentation)
+        self.has_max_threshold = has_max_threshold 
+        self.max_pw_floor = max_pw_floor
+        self.discount_factor = discount_factor
         
     def backprop_accumulative(self, reward: float):
         """Update node statistics upward through the tree"""
@@ -51,11 +55,11 @@ class A0C:
             self.current_node.N += 1
             self.current_node.Q += reward
 
-    def backprop_discounted_average(self, reward: float, avg_lat_eng_arr: List[float] = None):
+    def backprop_discounted_average(self, reward: float, avg_lat_eng_arr: List[float]):
         # Fuck the reward, use the average immediate reward arr
         num_tasks = len(avg_lat_eng_arr)
         for i in range(-2, -num_tasks-1, -1):
-            avg_lat_eng_arr[i] = avg_lat_eng_arr[i] + DISCOUNT_FACTOR*avg_lat_eng_arr[i+1]
+            avg_lat_eng_arr[i] = avg_lat_eng_arr[i] + self.discount_factor*avg_lat_eng_arr[i+1]
         for i in range(-1, -num_tasks-1, -1):
             if self.current_node is None:
                 raise AssertionError("Bullshit")
@@ -71,7 +75,7 @@ class A0C:
         self.global_step += 1
         self.current_node.state = env_resources
 
-        floor = self._get_progressive_widening_floor(self.current_node, is_adaptive=False, has_max_threshold=True)
+        floor = self._get_progressive_widening_floor(self.current_node)
         
         # Expand if under floor
         if floor > len(self.current_node.children): 
@@ -191,15 +195,15 @@ class A0C:
         action = dist.sample().tolist()
         return action
         
-    def _get_progressive_widening_floor(self, node: A0C_Node, is_adaptive, has_max_threshold) -> int:
-        if is_adaptive:
+    def _get_progressive_widening_floor(self, node: A0C_Node) -> int:
+        if self.is_adaptive:
             k, alpha = self._get_adaptive_pw_params()
             floor = int(k * (node.N ** alpha))
         else:
             floor = int(K_PW * (node.N ** ALPHA_PW))
         
-        if has_max_threshold:
-            return min(max(floor, MIN_PW_FLOOR), MAX_PW_FLOOR)
+        if self.has_max_threshold:
+            return min(max(floor, MIN_PW_FLOOR), self.max_pw_floor)
         else:
             return max(floor, MIN_PW_FLOOR)
 
@@ -210,7 +214,7 @@ class A0C:
         then hold at their minimum values.
         """
 
-        t = min(self.global_step / NUM_ITERATIONS, 1.0)
+        t = min(self.global_step / 10_000, 1.0) # TODO: still in experimentation, 10_000 is a good value for now
         k = ADAPTIVE_INITIAL_K * (1 - t) + ADAPTIVE_MIN_K * t
         alpha = ADAPTIVE_INITIAL_ALPHA * (1 - t) + ADAPTIVE_MIN_ALPHA * t
         return k, alpha
@@ -218,8 +222,8 @@ class A0C:
     def _best_child(self, node: A0C_Node) -> A0C_Node:
         # This stupid shit, fuck up, if discounted avg, do not divide Q, if accumulate, divide by N
         def uct(child: A0C_Node):
-            # exploitation = child.Q / child.N # For accumulative 
-            exploitation = child.Q # For discounted avg
+            exploitation = child.Q / child.N # For accumulative 
+            # exploitation = child.Q # For discounted avg
             exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N) / child.N )
             return exploitation + exploration
         scores = [uct(child) for child in node.children]

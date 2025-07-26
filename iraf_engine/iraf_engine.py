@@ -13,7 +13,7 @@ class IraFEngine:
     - Random
     - Greedy
     """
-    def __init__(self, algorithm):
+    def __init__(self, algorithm, cfg):
         self.algorithm = algorithm.lower()
         self.use_dnn = self.algorithm.endswith('-dnn')
         self.base = self.algorithm[:-4] if self.use_dnn else self.algorithm
@@ -22,7 +22,7 @@ class IraFEngine:
         elif self.base == 'mcts-pw':
             self.model = MCTS_PW(use_dnn=self.use_dnn)
         elif self.algorithm == 'a0c':
-            self.model = A0C()
+            self.model = A0C(cfg.has_max_threshold, cfg.max_pw_floor, cfg.discount_factor)
         elif self.algorithm == 'a0c-dnn':
             self.a0c = A0C_DNN()
         elif self.algorithm == 'random' or self.algorithm == 'greedy':
@@ -39,8 +39,8 @@ class IraFEngine:
             return self.model.get_ratios(env_resources)
 
     def backprop(self, reward, avg_lat_eng_arr=None):
-        self.model.backprop_discounted_average(reward, avg_lat_eng_arr)
-        # self.model.backprop_accumulative(reward)
+        # self.model.backprop_discounted_average(reward, avg_lat_eng_arr)
+        self.model.backprop_accumulative(reward)
     # def get_best_action(self):
     #     if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
     #         return self.mcts.get_best_action()

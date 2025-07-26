@@ -14,16 +14,16 @@ class CoMECEnvironment:
     - Handles task generation and state transitions
     - Computes resource allocation, latency, and energy
     """
-    def __init__(self):
+    def __init__(self, num_edge_servers, num_clusters, cpu_capacity, num_devices_per_cluster):
         # simulation state
         self.time = 0
         self.event_queue = []
         self.counter = itertools.count()
 
         # build infrastructure
-        self.edge_cluster = EdgeServerCluster()
+        self.edge_cluster = EdgeServerCluster(num_edge_servers, cpu_capacity)
 
-        self.cluster_manager = ClusterManager()
+        self.cluster_manager = ClusterManager(num_clusters, num_devices_per_cluster)
         
     def reset(self, reset_tasks=True):
         """Reset environment to initial state for a new episode"""

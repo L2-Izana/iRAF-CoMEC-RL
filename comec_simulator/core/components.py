@@ -67,7 +67,7 @@ class BaseStation:
 class EdgeServer:
     _counter = 0
     
-    def __init__(self, cpu_capacity=EDGE_SERVER_CPU_CAPACITY):
+    def __init__(self, cpu_capacity):
         self.server_id = EdgeServer._counter
         EdgeServer._counter += 1
         self.cpu_capacity = cpu_capacity
@@ -99,26 +99,25 @@ class TaskRequest:
 class Cluster:
     _counter = 0
     
-    def __init__(self):
+    def __init__(self, num_devices):
         self.cluster_id = Cluster._counter
         Cluster._counter += 1
         self.base_station = BaseStation()
-        self.mobile_devices = self._init_mobile_devices(self.base_station)
+        self.mobile_devices = self._init_mobile_devices(self.base_station, num_devices)
         self.num_devices = len(self.mobile_devices)
 
     def reset_bs_bandwidth(self):
         self.base_station.reset()
     
-    def _init_mobile_devices(self, base_station):
-        num_devices = random.randint(MIN_NUM_DEVICES, MAX_NUM_DEVICES)
+    def _init_mobile_devices(self, base_station, num_devices):
         return [MobileDevice(base_station) for _ in range(num_devices)]
     
     def __str__(self):
         return f"Cluster(cluster_id={self.cluster_id}, base_station={self.base_station}, num_devices={len(self.mobile_devices)})"
     
 class ClusterManager:
-    def __init__(self):
-        self.clusters: List[Cluster] = [Cluster() for _ in range(NUM_OF_CLUSTERS)]
+    def __init__(self, num_clusters, num_devices_per_cluster):
+        self.clusters: List[Cluster] = [Cluster(num_devices_per_cluster) for _ in range(num_clusters)]
         self.task_requests: List[TaskRequest] = self._generate_tasks()
         
     def reset_bs_bandwidth(self):
@@ -140,8 +139,8 @@ class ClusterManager:
     
 class EdgeServerCluster:
     
-    def __init__(self):
-        self.servers: List[EdgeServer] = [EdgeServer() for _ in range(NUM_EDGE_SERVERS)]
+    def __init__(self, num_edge_servers, cpu_capacity):
+        self.servers: List[EdgeServer] = [EdgeServer(cpu_capacity) for _ in range(num_edge_servers)]
         
     def reset(self):
         for server in self.servers:
