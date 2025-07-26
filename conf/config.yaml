@@ -1,0 +1,11 @@
+algorithm: a0c
+mode: train
+num_iter: 50000
+num_es: 8
+num_clusters: 2
+num_devices_per_cluster: 15
+message: ""
+cpu_capacity: 19.14e9
+has_max_threshold: True
+max_pw_floor: 70
+discount_factor: 0.99
