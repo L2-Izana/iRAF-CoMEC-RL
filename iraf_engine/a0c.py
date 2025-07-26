@@ -37,37 +37,41 @@ mixture_params = {
 class A0C:
     def __init__(self, has_max_threshold, max_pw_floor, discount_factor):
         self.total_nodes = 1
-        self.root = A0C_Node(depth=0)
-        self.current_node = self.root
+        self.root: A0C_Node = A0C_Node(depth=0)
+        self.current_node: A0C_Node = self.root
         self.global_step = 0 # used for adaptive
         self.is_adaptive = False  # Set to True if you want to use adaptive progressive widening (still in experimentation)
         self.has_max_threshold = has_max_threshold 
         self.max_pw_floor = max_pw_floor
         self.discount_factor = discount_factor
         
-    def backprop_accumulative(self, reward: float):
-        """Update node statistics upward through the tree"""
-        while self.current_node is not None and self.current_node.parent is not None:
-            self.current_node.N += 1
-            self.current_node.Q += reward
-            self.current_node = self.current_node.parent
-        if self.current_node is not None:
-            self.current_node.N += 1
-            self.current_node.Q += reward
-
-    def backprop_discounted_average(self, reward: float, avg_lat_eng_arr: List[float]):
+    def backprop(self, rewards: List[float]) -> None:
+        """
+        Perform backpropagation of discounted rewards through the current node path.
+        
+        Args:
+            rewards (List[float]): List of immediate rewards at each step in the episode,
+                                assumed to be in temporal order (oldest to newest).
+        """
         # Fuck the reward, use the average immediate reward arr
-        num_tasks = len(avg_lat_eng_arr)
-        for i in range(-2, -num_tasks-1, -1):
-            avg_lat_eng_arr[i] = avg_lat_eng_arr[i] + self.discount_factor*avg_lat_eng_arr[i+1]
-        for i in range(-1, -num_tasks-1, -1):
+        num_tasks = len(rewards)
+        
+        # Apply discounting from the end of the episode backward
+        for i in range(num_tasks - 2, -1, -1):
+            rewards[i] += self.discount_factor * rewards[i + 1]
+
+        # Backpropagate through visited nodes
+        for reward in reversed(rewards):
             if self.current_node is None:
-                raise AssertionError("Bullshit")
+                raise RuntimeError("Backpropagation failed: node path incomplete.")
             self.current_node.N += 1
-            self.current_node.W += avg_lat_eng_arr[i]
+            self.current_node.W += reward
             self.current_node.Q = self.current_node.W / self.current_node.N
             self.current_node = self.current_node.parent
-        self.current_node.N += 1
+        
+        # Update root node if still accessible
+        if self.current_node is not None:
+            self.current_node.N += 1
         
         
     def get_ratios(self, env_resources) -> Tuple[float, ...]:
@@ -220,10 +224,8 @@ class A0C:
         return k, alpha
     
     def _best_child(self, node: A0C_Node) -> A0C_Node:
-        # This stupid shit, fuck up, if discounted avg, do not divide Q, if accumulate, divide by N
         def uct(child: A0C_Node):
-            exploitation = child.Q / child.N # For accumulative 
-            # exploitation = child.Q # For discounted avg
+            exploitation = child.Q 
             exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N) / child.N )
             return exploitation + exploration
         scores = [uct(child) for child in node.children]

@@ -38,9 +38,9 @@ class IraFEngine:
         else:
             return self.model.get_ratios(env_resources)
 
-    def backprop(self, reward, avg_lat_eng_arr=None):
-        # self.model.backprop_discounted_average(reward, avg_lat_eng_arr)
-        self.model.backprop_accumulative(reward)
+    def backprop(self, rewards):
+        self.model.backprop(rewards)
+        
     # def get_best_action(self):
     #     if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
     #         return self.mcts.get_best_action()

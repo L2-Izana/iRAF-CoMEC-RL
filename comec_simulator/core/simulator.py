@@ -81,21 +81,16 @@ class CoMECSimulator:
                 )
 
             arrival_time_sorted_trajectory = sorted(trajectory.items(), key=lambda x: x[1][0]['task'].arrival_time)
-            # print(arrival_time_sorted_trajectory[0])
-            # exit(1)
             for task_id, step in arrival_time_sorted_trajectory:
                 env_resources, alphas, metrics = step[0], step[1], step[2]
                 if len(step) != 3:
                     print("Bullshit")
                     exit(1)
-                # print(f"Task {task_id} arrived at {env_resources['task'].arrival_time}, allocated with alphas: {alphas}, latency: {metrics[0]}, energy: {metrics[1]}")
-            # time.sleep(1)  # Sleep to allow for any async operations to complete
-            # After run, backprop the tree and collect final data
             average_metrics = self.metrics.get_average_metrics()
             reward = self._get_objective_value(average_metrics, optimize_for)
             avg_lat_eng_arr = [-np.average(step[1][-1]) for step in arrival_time_sorted_trajectory]
             assert reward > 0, f"Reward should be positive, got {reward}"
-            self.iraf_engine.backprop(-reward, avg_lat_eng_arr) # Make it negative to minimize the objective value
+            self.iraf_engine.backprop(avg_lat_eng_arr) # Make it negative to minimize the objective value
             node_count = self.iraf_engine.get_node_count()
             
             # Record tree iteration step attributes
