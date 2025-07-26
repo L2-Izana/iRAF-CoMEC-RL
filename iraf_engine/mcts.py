@@ -3,40 +3,39 @@ from typing import List, Tuple
 import torch
 
 import numpy as np
-from comec_simulator.core.constants import DNN_INPUT_DIM
+from comec_simulator.core.constants import DNN_INPUT_DIM, EXPLORATION_BONUS
 from iraf_engine.dnn import IRafMultiTaskDNN
 import random
 from iraf_engine.node import Node, AlphaZeroNode
 
+BINS_PER_SUBACTION_LIST = [20, 10, 10, 10, 10]
+
 class MCTS:
-    def __init__(
-        self, 
-        bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10], 
-        use_dnn: bool = False
-        ):
-        self.bins_per_subaction_list = bins_per_subaction_list
+    def __init__(self, use_dnn, cfg):
         self.use_dnn = use_dnn
         self.total_nodes = 1  
-        
+        input_dim = cfg.num_es + cfg.num_clusters + 4
         print(f"Using DNN: {use_dnn}")
         if use_dnn:
             print("Loading DNN model")
-            self.model = IRafMultiTaskDNN(input_dim=DNN_INPUT_DIM, head_dims=bins_per_subaction_list)
+            self.model = IRafMultiTaskDNN(input_dim=input_dim, head_dims=BINS_PER_SUBACTION_LIST)
             self.model.load_state_dict(torch.load("D:\\Research\\IoT\\iRAF-CoMEC-RL\\trained_iraf_policy_small.pt", weights_only=True))
             self.root = AlphaZeroNode(depth=0)
             self.model.eval()
         else:
             self.model = None
             self.root = Node(depth=0)
-        self.current_node = self.root
-        self.bins = [np.linspace(0, 1, bins_per_subaction + 2)[1:-1].tolist() for bins_per_subaction in self.bins_per_subaction_list]
+        self.current_node: Node = self.root
+        self.bins = [np.linspace(0, 1, bins_per_subaction + 2)[1:-1].tolist() for bins_per_subaction in BINS_PER_SUBACTION_LIST]
         self.dnn_call_count = 0
-        self.discount_factor = 0.99
     
     def backprop(self, reward: float):
         """Update node statistics upward through the tree"""
+        reward = np.average(reward) #TODO: As this tree structure is each subactio per depth, so we can only use the accumulative approach
         action_sequence = []
         while self.current_node.parent is not None:
+            if self.current_node.action is None:
+                raise ValueError("Current node action is None, cannot backpropagate")
             action_sequence.append(self.current_node.action[2])
             self.current_node.N += 1
             self.current_node.Q += reward
@@ -68,13 +67,13 @@ class MCTS:
             # For negative rewards, higher (less negative) Q/N is better
             exploitation = child.Q / (child.N + 1e-6)
             # Add exploration bonus
-            exploration = self.c * np.sqrt(np.log(node.N+1) / (1+child.N))
+            exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N+1) / (1+child.N))
             
             return exploitation + exploration
         
         def puct(child: AlphaZeroNode):
             exploitation = child.Q / (child.N + 1e-6)
-            exploration = self.c * child.prior * np.sqrt(np.log(node.N+1)) / (1+ child.N)
+            exploration = EXPLORATION_BONUS * child.prior * np.sqrt(np.log(node.N+1)) / (1+ child.N)
             return exploitation + exploration
         
         # print(f"Node at depth {node.depth} has {len(node.children)} children")
@@ -100,13 +99,14 @@ class MCTS:
         ratios = np.ones(5)
         if self.use_dnn:
             if not self.current_node.expanded:
-                env_resources = torch.tensor(env_resources, dtype=torch.float32).unsqueeze(0)
+                env_resources_dnn = env_resources['resources_dnn']
+                env_resources_dnn = torch.tensor(env_resources_dnn, dtype=torch.float32).unsqueeze(0)
                 with torch.no_grad():
-                    probs = self.model(env_resources)
+                    probs = self.model(env_resources_dnn)
                 probs = [p.detach() for p in probs]
                 self.dnn_call_count += 1
                 for i in range(5):
-                    for j in range(self.bins_per_subaction_list[i]):
+                    for j in range(BINS_PER_SUBACTION_LIST[i]):
                         prior = probs[i][j].item()
                         depth = self.current_node.depth + 1
                         task_idx, subaction_idx = self.current_node.get_node_index()
@@ -188,7 +188,7 @@ class MCTS:
         for i in range(5):
             # Expand if not expanded
             if not self.current_node.expanded:
-                num_bins = self.bins_per_subaction_list[i]
+                num_bins = BINS_PER_SUBACTION_LIST[i]
                 for j in range(num_bins):
                     depth = self.current_node.depth + 1
                     task_idx, subaction_idx = self.current_node.get_node_index()

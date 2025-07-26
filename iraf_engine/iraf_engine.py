@@ -15,16 +15,12 @@ class IraFEngine:
     """
     def __init__(self, algorithm, cfg):
         self.algorithm = algorithm.lower()
-        self.use_dnn = self.algorithm.endswith('-dnn')
-        self.base = self.algorithm[:-4] if self.use_dnn else self.algorithm
-        if self.base == 'mcts':
-            self.model = MCTS(use_dnn=self.use_dnn)
-        elif self.base == 'mcts-pw':
-            self.model = MCTS_PW(use_dnn=self.use_dnn)
+        if self.algorithm == 'mcts':
+            self.model = MCTS(use_dnn=cfg.use_dnn, cfg=cfg)
+        elif self.algorithm == 'mcts-pw':
+            self.model = MCTS_PW(use_dnn=cfg.use_dnn, cfg=cfg)
         elif self.algorithm == 'a0c':
-            self.model = A0C(cfg.has_max_threshold, cfg.max_pw_floor, cfg.discount_factor)
-        elif self.algorithm == 'a0c-dnn':
-            self.a0c = A0C_DNN()
+            self.model = A0C(cfg.has_max_threshold, cfg.max_pw_floor, cfg.discount_factor, use_dnn=cfg.use_dnn)
         elif self.algorithm == 'random' or self.algorithm == 'greedy':
             pass
         else:
@@ -34,7 +30,7 @@ class IraFEngine:
         if self.algorithm == 'random':
             return np.random.rand(5)
         elif self.algorithm == 'greedy':
-            return np.ones(5)
+            return np.ones(5)*0.99
         else:
             return self.model.get_ratios(env_resources)
 
@@ -62,11 +58,7 @@ class IraFEngine:
     def get_node_count(self):
         assert hasattr(self.model,  'get_node_count'), f"Algorithm {self.algorithm} does not support node count retrieval"
         return self.model.get_node_count()
-    
-    def get_best_node(self):
-        assert hasattr(self.model, 'get_best_node'), f"Algorithm {self.algorithm} does not support best node retrieval"
-        return self.model.get_best_node()
-    
+        
     # def get_dnn_call_count(self):
     #     if 'dnn' in self.algorithm:
     #         if self.algorithm == 'mcts-pw-dnn':
@@ -78,8 +70,8 @@ class IraFEngine:
     #     else:
     #         return 0
     
-    def get_training_dataset(self):
-        if self.algorithm == 'a0c':
-            return self.a0c.get_training_dataset()
-        else:
-            raise ValueError(f"Only A0C supports it right now")
+    # def get_training_dataset(self):
+    #     if self.algorithm == 'a0c':
+    #         return self.model.get_training_dataset()
+    #     else:
+    #         raise ValueError(f"Only A0C supports it right now")
