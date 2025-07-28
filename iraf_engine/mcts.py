@@ -3,12 +3,11 @@ from typing import List, Tuple
 import torch
 
 import numpy as np
-from comec_simulator.core.constants import DNN_INPUT_DIM, EXPLORATION_BONUS
+from comec_simulator.core.constants import BINS_PER_SUBACTION_LIST, DNN_INPUT_DIM, EXPLORATION_BONUS
 from iraf_engine.dnn import IRafMultiTaskDNN
 import random
 from iraf_engine.node import Node, AlphaZeroNode
 
-BINS_PER_SUBACTION_LIST = [20, 10, 10, 10, 10]
 
 class MCTS:
     def __init__(self, use_dnn, cfg):

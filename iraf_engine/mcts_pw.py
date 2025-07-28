@@ -8,24 +8,16 @@ from scipy.stats import beta
 from iraf_engine.dnn import IRafMultiTaskDNN
 from iraf_engine.node import AlphaZeroNode, Node, Node_PW
 from comec_simulator.core.components import BaseStation, EdgeServer, Task
-
+from comec_simulator.core.constants import BINS_PER_SUBACTION_LIST, DNN_INPUT_DIM, EXPLORATION_BONUS, ALPHA_PW, K_PW
 # Assuming MCTS and necessary imports are available
 from iraf_engine.mcts import MCTS
 
 MIN_PW_FLOOR = 3
 
 class MCTS_PW(MCTS):
-    def __init__(
-        self, 
-        bins_per_subaction_list: List[int] = [20, 10, 10, 10, 10],
-        use_dnn: bool = False, 
-        k_pw: float = 1.0, 
-        alpha_pw: float = 0.5
-        ):
-        super().__init__(bins_per_subaction_list=bins_per_subaction_list, use_dnn=use_dnn)
+    def __init__(self, use_dnn, cfg):
+        super().__init__(use_dnn, cfg)
         # Progressive Widening parameters
-        self.k_pw = k_pw
-        self.alpha_pw = alpha_pw
         self.root = Node_PW(depth=0)
         self.current_node = self.root
         if not use_dnn: # This is for mcts with pw only, try this as mcts+dnn+pw is now too subjective
@@ -47,9 +39,10 @@ class MCTS_PW(MCTS):
     def _get_ratios_dnn(self, env_resources) -> Tuple[float, float, float, float, float]:
         ratios = np.ones(5)
         if self._is_unexpanded(self.current_node): # This is the case of the first rollout of undiscovered node
-            env_resources = torch.tensor(env_resources, dtype=torch.float32).unsqueeze(0)
+            env_resources_dnn = env_resources['resources_dnn']
+            env_resources_dnn = torch.tensor(env_resources_dnn, dtype=torch.float32).unsqueeze(0)
             with torch.no_grad():   
-                probs = self.model(env_resources)
+                probs = self.model(env_resources_dnn)
             probs = [p.detach() for p in probs]
             self.dnn_call_count += 1
             self.current_node.task_dnn_output = probs # No need for children_dnn_output, so let's think like dnn output is needed for the later subactions, so for the last node of the previous task, it does not need to store the dnn for above subactions, so it can store the dnn output for the current task
@@ -160,7 +153,7 @@ class MCTS_PW(MCTS):
         return node.children == []
     
     def _get_progressive_widening_floor(self, node: Node) -> int:
-        progressive_widening_floor = int(self.k_pw * (node.N ** self.alpha_pw))
+        progressive_widening_floor = int(K_PW * (node.N ** ALPHA_PW))
         return max(progressive_widening_floor, MIN_PW_FLOOR)
     
     def _get_beta_distribution(self, node: Node, a=2., b=0.5) -> List[float]:

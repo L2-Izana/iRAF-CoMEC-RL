@@ -20,7 +20,7 @@ class IraFEngine:
         elif self.algorithm == 'mcts-pw':
             self.model = MCTS_PW(use_dnn=cfg.use_dnn, cfg=cfg)
         elif self.algorithm == 'a0c':
-            self.model = A0C(cfg.has_max_threshold, cfg.max_pw_floor, cfg.discount_factor, use_dnn=cfg.use_dnn)
+            self.model = A0C(cfg.max_pw_floor, cfg.discount_factor, use_dnn=cfg.use_dnn)
         elif self.algorithm == 'random' or self.algorithm == 'greedy':
             pass
         else:
@@ -37,14 +37,9 @@ class IraFEngine:
     def backprop(self, rewards):
         self.model.backprop(rewards)
         
-    # def get_best_action(self):
-    #     if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
-    #         return self.mcts.get_best_action()
-    #     elif self.algorithm == 'mcts-pw' or self.algorithm == 'mcts-pw-dnn':
-    #         return self.mcts_pw.get_best_action()
-    #     else:
-    #         raise ValueError(f"Algorithm {self.algorithm} not supported")
-
+    def get_best_action(self):
+        return self.model.get_best_action()
+    
     # def extract_action_probabilities(self):
     #     if self.algorithm == 'mcts' or self.algorithm == 'mcts-dnn':
     #         return self.mcts.extract_action_probabilities()

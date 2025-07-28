@@ -35,13 +35,12 @@ mixture_params = {
 }
 
 class A0C:
-    def __init__(self, has_max_threshold, max_pw_floor, discount_factor, use_dnn): # use_dnn is still in experimentation
+    def __init__(self, max_pw_floor, discount_factor, use_dnn): # use_dnn is still in experimentation
         self.total_nodes = 1
         self.root: A0C_Node = A0C_Node(depth=0)
         self.current_node: A0C_Node = self.root
         self.global_step = 0 # used for adaptive
         self.is_adaptive = False  # Set to True if you want to use adaptive progressive widening (still in experimentation)
-        self.has_max_threshold = has_max_threshold 
         self.max_pw_floor = max_pw_floor
         self.discount_factor = discount_factor
         
@@ -198,16 +197,16 @@ class A0C:
         return action
         
     def _get_progressive_widening_floor(self, node: A0C_Node) -> int:
-        if self.is_adaptive:
-            k, alpha = self._get_adaptive_pw_params()
-            floor = int(k * (node.N ** alpha))
-        else:
-            floor = int(K_PW * (node.N ** ALPHA_PW))
-        
-        if self.has_max_threshold:
+        # if self.is_adaptive:
+        #     k, alpha = self._get_adaptive_pw_params()
+        #     floor = int(k * (node.N ** alpha))
+        # else:
+        #     floor = int(K_PW * (node.N ** ALPHA_PW))
+        floor = int(K_PW * (node.N ** ALPHA_PW))
+        if self.max_pw_floor:
             return min(max(floor, MIN_PW_FLOOR), self.max_pw_floor)
         else:
-            return max(floor, MIN_PW_FLOOR)
+            return max(floor, MIN_PW_FLOOR)  # 0 or None max floor
 
 
     def _get_adaptive_pw_params(self) -> Tuple[float, float]:
@@ -224,7 +223,7 @@ class A0C:
     def _best_child(self, node: A0C_Node) -> A0C_Node:        
         def uct(child: A0C_Node):
             exploitation = child.Q 
-            exploration = EXPLORATION_BONUS * np.sqrt(np.log(node.N) / child.N )
+            exploration = EXPLORATION_BONUS * np.sqrt(2*np.log(node.N) / child.N )
             return exploitation + exploration
         scores = [uct(child) for child in node.children]
         idx = int(np.argmax(scores))
