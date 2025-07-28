@@ -9,7 +9,6 @@ EMPERICAL_RUN_FOLDER = "empirical_runs"
 class MetricsTracker:
     def __init__(self, total_tasks, algorithm):
         self.metrics = {
-            'completed_tasks': 0,
             'total_latency': 0,
             'total_energy': 0,
             'time_points': [],
@@ -21,12 +20,9 @@ class MetricsTracker:
         self.total_tasks = total_tasks
         self.node_counts = []
         self.rewards = []
-        self.empirical_run_number = self.get_latest_empirical_run() + 1
-        self.empirical_run_folder = f"{EMPERICAL_RUN_FOLDER}/number_{self.empirical_run_number}_{algorithm}"
         
     def reset(self):
         self.metrics = {
-            'completed_tasks': 0,
             'total_latency': 0,
             'total_energy': 0,
             'time_points': [],
@@ -45,27 +41,22 @@ class MetricsTracker:
         self.metrics['base_station_bandwidth_utilization'].append(bw_u)
 
     def record_task_completion(self, latency, energy):
-        self.metrics['completed_tasks'] += 1
         self.metrics['total_latency'] += latency
         self.metrics['total_energy'] += energy
         self.metrics['latency_per_task'].append(latency)
         self.metrics['energy_per_task'].append(energy)
 
     def get_average_metrics(self):
-        c = self.metrics['completed_tasks']
-        if c:
-            return {
-                'avg_latency': self.metrics['total_latency'] / c,
-                'avg_energy': self.metrics['total_energy'] / c
-            }
-        return {'avg_latency': 0, 'avg_energy': 0}
+        return {
+            'avg_latency': self.metrics['total_latency'] / self.total_tasks,
+            'avg_energy': self.metrics['total_energy'] / self.total_tasks
+        }
 
     def record_tree_iteration_step_attributes(self, node_count, reward):
         assert node_count >= 0, f"Node count should be non-negative, got {node_count}"
         assert reward >= 0, f"Reward should be non-negative, got {reward}"
         self.node_counts.append(node_count)
         self.rewards.append(reward)
-
 
     def plot_tree_iteration_step_attributes(self, saved=True):
         plt.figure(figsize=(12, 10))
@@ -104,8 +95,7 @@ class MetricsTracker:
         plt.tight_layout()
 
         if saved:
-            os.makedirs(self.empirical_run_folder, exist_ok=True)
-            plt.savefig(f"{self.empirical_run_folder}/tree_iteration_step_attributes.png")
+            plt.savefig(f"tree_iteration_step_attributes.png")
         else:
             plt.show()
         
@@ -113,72 +103,48 @@ class MetricsTracker:
         plt.figure(figsize=(12, 10))
         
         # Task completion plot
-        plt.subplot(5, 1, 1)
-        plt.bar(['Done', 'Failed'],
-                [self.metrics['completed_tasks'], self.total_tasks - self.metrics['completed_tasks']])
-        plt.title(f"Task Success Rate: {self.metrics['completed_tasks']}/{self.total_tasks}")
+        plt.subplot(4, 1, 1)
         
         # Latency plot
-        avg_latency = self.metrics['total_latency'] / self.metrics['completed_tasks']
-        plt.subplot(5, 1, 2)
+        avg_latency = self.metrics['total_latency'] / self.total_tasks
+        plt.subplot(4, 1, 1)
         plt.plot(self.metrics['latency_per_task'])
         plt.title(f"Latency Total:{self.metrics['total_latency']:.1f}ms\nAvg:{avg_latency:.1f}ms")
         
         # Energy plot
-        avg_energy = self.metrics['total_energy'] / self.metrics['completed_tasks']
-        plt.subplot(5, 1, 3)
+        avg_energy = self.metrics['total_energy'] / self.total_tasks
+        plt.subplot(4, 1, 2)
         plt.plot(self.metrics['energy_per_task'])
         plt.title(f"Energy Total:{self.metrics['total_energy']:.3f}J\nAvg:{avg_energy:.3f}J")
         
         # CPU utilization plot
-        plt.subplot(5, 1, 4)
+        plt.subplot(4, 1, 3)
         plt.plot(self.metrics['edge_server_cpu_utilization'], label='CPU')
         plt.title('CPU Utilization')
         
         # Bandwidth utilization plot
-        plt.subplot(5, 1, 5)
+        plt.subplot(4, 1, 4)
         plt.plot(self.metrics['base_station_bandwidth_utilization'], label='BW')
         plt.title('Bandwidth Utilization')
 
         plt.tight_layout()
         
         if saved:
-            # Create results directory if it doesn't exist
-            os.makedirs(self.empirical_run_folder, exist_ok=True)
-            plt.savefig(f'{self.empirical_run_folder}/metrics.png')
+            plt.savefig('metrics.png')
         else:
             plt.show()
-
         
     def plot_results(self, saved=False):        
         self.plot_metrics(saved)
         self.plot_tree_iteration_step_attributes(saved)
 
     def save_metrics(self, saved=False, message=None, config=None):
-        os.makedirs(self.empirical_run_folder, exist_ok=True)
-
         if saved:
-            print(f"Saving metrics to {self.empirical_run_folder}")
-
-            # Save metrics arrays
             for key, value in self.metrics.items():
-                np.save(f"{self.empirical_run_folder}/{key}.npy", value)
-            np.save(f"{self.empirical_run_folder}/node_counts.npy", self.node_counts)
-            np.save(f"{self.empirical_run_folder}/rewards.npy", self.rewards)
+                np.save(f"{key}.npy", value)
+            np.save(f"node_counts.npy", self.node_counts)
+            np.save(f"rewards.npy", self.rewards)
 
-            # Save message
             if message:
-                with open(f"{self.empirical_run_folder}/message.txt", 'w') as f:
+                with open(f"message.txt", 'w') as f:
                     f.write(message)
-                            
-    def get_latest_empirical_run(self) -> int:
-        if os.path.exists(EMPERICAL_RUN_FOLDER):
-            folders = [f for f in os.listdir(EMPERICAL_RUN_FOLDER) 
-                    if os.path.isdir(os.path.join(EMPERICAL_RUN_FOLDER, f))
-                    and f.startswith('number_')]
-            if not folders:
-                return 0
-            # Extract numbers from folder names like 'empirical_run_1'
-            run_numbers = [int(f.split('_')[1]) for f in folders]
-            return max(run_numbers)
-        return 0

@@ -34,10 +34,10 @@ def main(cfg: DictConfig):
 
     log.info("Starting simulator in %s mode with algorithm: %s", cfg.mode, cfg.algorithm)
 
-    print_memory_usage("Before creating simulator")
     sim = CoMECSimulator(
         iterations=cfg.num_iter,
         algorithm=cfg.algorithm,
+        optimize_for="latency",
         num_edge_servers=cfg.num_es,
         num_clusters=cfg.num_clusters,
         cpu_capacity=cfg.cpu_capacity,
@@ -47,13 +47,15 @@ def main(cfg: DictConfig):
     print_memory_usage("After creating simulator")
 
     if cfg.mode == "train":
-        metrics = sim.run(optimize_for="latency_energy")
+        metrics = sim.run()
         print_memory_usage("After running simulation")
         sim.metrics.plot_results(saved=True)
         sim.metrics.save_metrics(saved=True, message=cfg.message, config=cfg)
-        print_memory_usage("After saving results")
+        best_action = sim.iraf_engine.get_best_action()
+        if best_action is not None:
+            np.save("best_action.npy", best_action)
     else:
-        metrics = sim.eval(optimize_for="latency_energy")
+        metrics = sim.eval()
         print(metrics)
 
 
