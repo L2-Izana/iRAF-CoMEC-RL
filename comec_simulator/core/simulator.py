@@ -16,6 +16,7 @@ class CoMECSimulator:
         self,
         iterations,
         algorithm,
+        optimize_for,
         num_edge_servers,
         num_clusters,
         cpu_capacity,
@@ -23,7 +24,8 @@ class CoMECSimulator:
         cfg # Detailed configuration for a specific algorithm
     ):
         self.iterations = iterations
-
+        self.optimize_for = optimize_for
+        
         # Create environment and metrics
         self.env = CoMECEnvironment(num_edge_servers=num_edge_servers, num_clusters=num_clusters, cpu_capacity=cpu_capacity, num_devices_per_cluster=num_devices_per_cluster)
         self.metrics = MetricsTracker(self.env.get_num_tasks(), algorithm)
@@ -32,12 +34,16 @@ class CoMECSimulator:
         self.iraf_engine = IraFEngine(algorithm, cfg)
         self.algorithm = algorithm
             
-    def run(self, optimize_for, save_empirical_run=False):
+    def run(self):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         self.env.reset(reset_tasks=True)
-        for _ in range(self.iterations):            
-            if self._check_tree_stop_condition(self.iraf_engine.get_node_count(), self.metrics.get_average_metrics(), self._get_objective_value(self.metrics.get_average_metrics(), optimize_for), _):
+        for _ in range(self.iterations):
+            node_count = self.iraf_engine.get_node_count()            
+            if self._check_tree_stop_condition(
+                node_count, 
+                self.metrics.get_average_metrics(), 
+                self._get_objective_value(self.metrics.get_average_metrics(), self.optimize_for), _):
                 break
             trajectory = {}
 
@@ -89,38 +95,50 @@ class CoMECSimulator:
                     print("Bullshit")
                     exit(1)
             average_metrics = self.metrics.get_average_metrics()
-            reward = self._get_objective_value(average_metrics, optimize_for)
-            avg_lat_eng_arr = [-np.average(step[1][-1]) for step in arrival_time_sorted_trajectory]
-            assert reward > 0, f"Reward should be positive, got {reward}"
-            self.iraf_engine.backprop(avg_lat_eng_arr) # Make it negative to minimize the objective value
+            trajectory_vector = [step[1] for step in arrival_time_sorted_trajectory] # To access the trajectory vector, [0] for task_id
+            rewards = None
+            if self.optimize_for == 'latency':
+                rewards = [trajectory_e[-1][0] for trajectory_e in trajectory_vector]
+                # print(f"Rewards: {rewards}")
+                # time.sleep(0.1)  # To avoid too fast printing
+            elif self.optimize_for == 'energy':
+                rewards = [trajectory_e[-1][1] for trajectory_e in trajectory_vector]
+            elif self.optimize_for == 'latency_energy':
+                rewards = [np.average(step[-1]) for step in trajectory_vector]
+            else:
+                raise ValueError(f"Invalid optimize_for: {self.optimize_for}")
+            # reward = self._get_objective_value(average_metrics, optimize_for)
+            # avg_lat_eng_arr = [-np.average(step[1][-1]) for step in arrival_time_sorted_trajectory]
+            # assert reward > 0, f"Reward should be positive, got {reward}"
+            self.iraf_engine.backprop(-np.array(rewards)) # Make it negative to minimize the objective value
             node_count = self.iraf_engine.get_node_count()
             
             # Record tree iteration step attributes
-            self.metrics.record_tree_iteration_step_attributes(node_count, reward)
+            self.metrics.record_tree_iteration_step_attributes(node_count, np.mean(rewards))
             
             # Note: task completions record latency/energy via callbacks
             all_metrics.append(average_metrics)
             
             # Log the performance every 500 iterations            
             if (_ + 1) % 500 == 0:
-                self._print_results(average_metrics, node_count, reward, _)
+                self._print_results(average_metrics, node_count, np.mean(rewards), _)
 
             
-        if optimize_for == 'latency':
-            metrics = [metric['avg_latency'] for metric in all_metrics]
+        # if optimize_for == 'latency':
+        #     metrics = [metric['avg_latency'] for metric in all_metrics]
             
-        elif optimize_for == 'energy':
-            metrics = [metric['avg_energy'] for metric in all_metrics]
-        elif optimize_for == 'latency_energy':
-            metrics = [metric['avg_latency'] + metric['avg_energy'] for metric in all_metrics]
-        else:
-            raise ValueError(f"Invalid optimize_for: {optimize_for}")
-        if save_empirical_run:
-            with open(f'{optimize_for}_metrics_{self.algorithm}_{time.time()}.txt', 'w') as f:
-                np.savetxt(f, metrics)
+        # elif optimize_for == 'energy':
+        #     metrics = [metric['avg_energy'] for metric in all_metrics]
+        # elif optimize_for == 'latency_energy':
+        #     metrics = [metric['avg_latency'] + metric['avg_energy'] for metric in all_metrics]
+        # else:
+        #     raise ValueError(f"Invalid optimize_for: {optimize_for}")
+        # if save_empirical_run:
+        #     with open(f'{optimize_for}_metrics_{self.algorithm}_{time.time()}.txt', 'w') as f:
+        #         np.savetxt(f, metrics)
         return all_metrics
     
-    def eval(self, optimize_for):
+    def eval(self):
         """Run simulation for `iterations` episodes and return metrics."""
         all_metrics = []
         self.env.reset(reset_tasks=True)
@@ -138,7 +156,6 @@ class CoMECSimulator:
             elif event['func'] == self.env.handle_completion:
                 total_latency = event['args'][0]['total_latency']
                 total_energy = event['args'][0]['total_energy']
-                # print(f"E: {total_energy} | L: {total_latency}")
                 self.metrics.record_task_completion(total_latency, total_energy)
                 step_args = (self.env.handle_completion, event['args'])
 

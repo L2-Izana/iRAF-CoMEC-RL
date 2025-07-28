@@ -1,12 +1,11 @@
-algorithm: mcts
+algorithm: a0c
 mode: train
 num_iter: 100000
 num_es: 4
 num_clusters: 1
-num_devices_per_cluster: 20
-message: "The most servere shit ever run"
-cpu_capacity: 19.14e9
-has_max_threshold: True
-max_pw_floor: 100
+num_devices_per_cluster: 10
+message: "Toy"
+cpu_capacity: 3e9
+max_pw_floor: 50
 discount_factor: 0.1
 use_dnn: True
