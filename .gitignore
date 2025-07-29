@@ -193,3 +193,4 @@ pi_dataset_small/
 test_plot.py
 .vscode/
 outputs/
+extract_data.py

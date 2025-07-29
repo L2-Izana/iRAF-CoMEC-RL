@@ -29,13 +29,6 @@ This project implements a Monte Carlo Tree Search (MCTS) based solution for opti
 └── main.py                # Main execution script
 ```
 
-## Requirements
-
-- Python 3.8+
-- NumPy
-- Matplotlib
-- Additional dependencies listed in requirements.txt
-
 ## Usage
 
 1. Install dependencies:
