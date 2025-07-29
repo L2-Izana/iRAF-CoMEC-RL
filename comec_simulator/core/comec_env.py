@@ -4,7 +4,7 @@ import random
 import time
 import numpy as np
 
-from ..core.components import BaseStation, Cluster, ClusterManager, EdgeServer, EdgeServerCluster, MobileDevice, Task, TaskRequest
+from ..core.components import BaseStation, ClusterManager, EdgeServerCluster, MobileDevice, Task, TaskRequest
 from ..core.constants import *
 
 class CoMECEnvironment:
@@ -95,8 +95,7 @@ class CoMECEnvironment:
         assert len(alphas) == 5, "alphas must be a tuple of 5 elements"
         assert all(0 <= alpha <= 1 for alpha in alphas), "alphas must be in the range [0, 1]"
         # unpack alphas, allocation ratios
-        if not isinstance(alphas, tuple):
-            raise ValueError(f"alphas must be a tuple of 5 elements, not {alphas}")
+        alphas = tuple(alphas)
         alpha_B, alpha_u2e, alpha_e2ehat, alpha_e, alpha_ehat = alphas
 
         # Validate and get components from task request
@@ -168,9 +167,11 @@ class CoMECEnvironment:
     def get_edge_servers(self):
         """Get all edge servers in the environment."""
         return self.edge_cluster.servers
+    
     def get_base_stations(self):
         """Get all base stations in the environment."""
         return self.cluster_manager.get_base_stations()
+    
     def get_num_tasks(self):
         """Get the number of tasks currently in the environment."""
         return len(self.cluster_manager.task_requests)
