@@ -93,7 +93,9 @@ class CoMECEnvironment:
         """
         assert alphas is not None, "alphas must not be None"
         assert len(alphas) == 5, "alphas must be a tuple of 5 elements"
-        assert all(0 <= alpha <= 1 for alpha in alphas), "alphas must be in the range [0, 1]"
+        assert all(0 < alpha < 1 for alpha in alphas), "alphas must be in the range (0, 1)"
+        eps = 1e-3
+        alphas = np.clip(alphas, eps, 1 - eps)
         # unpack alphas, allocation ratios
         alphas = tuple(alphas)
         alpha_B, alpha_u2e, alpha_e2ehat, alpha_e, alpha_ehat = alphas
