@@ -83,7 +83,7 @@ def main():
         vf_coef=0.5,
     )
 
-    total_timesteps = 50e6
+    total_timesteps = 1e5
     logging.info(f"Training {algo.upper()} for {total_timesteps} timesteps...")
     model.learn(
         total_timesteps=int(total_timesteps),
