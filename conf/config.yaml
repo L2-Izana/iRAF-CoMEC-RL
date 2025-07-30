@@ -3,7 +3,7 @@ mode: train
 num_iter: 100000
 num_es: 4
 num_clusters: 1
-num_devices_per_cluster: 10
+num_devices_per_cluster: 50
 message: "Toy"
 cpu_capacity: 3e9
 max_pw_floor: 50

@@ -9,6 +9,7 @@ import torch
 from stable_baselines3 import A2C, PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecMonitor
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
 
 # ensure environment registration
 import comec_gym.env
@@ -47,18 +48,28 @@ def main():
         "num_devices_per_cluster": config["num_devices_per_cluster"]
     }
 
-    # vectorized environment with Monitor + VecMonitor + VecNormalize
-    dummy_env = DummyVecEnv([make_env_fn(env_kwargs)])
-    vec_env = VecMonitor(dummy_env)            # record episode stats
-    vec_env = VecNormalize(
-        vec_env,
+    # training environment
+    train_env = DummyVecEnv([make_env_fn(env_kwargs)])
+    train_env = VecMonitor(train_env)
+    train_env = VecNormalize(
+        train_env,
+        norm_obs=False,
+        norm_reward=True,
+        clip_reward=1.0
+    )
+
+    # evaluation environment (for early stopping)
+    eval_env = DummyVecEnv([make_env_fn(env_kwargs)])
+    eval_env = VecMonitor(eval_env)
+    eval_env = VecNormalize(
+        eval_env,
         norm_obs=False,
         norm_reward=True,
         clip_reward=1.0
     )
 
     # select algorithm
-    algo = config.get("algorithm", "a0c").lower()
+    algo = config.get("algorithm", "a2c").lower()
     if algo in ["a2c", "a0c"]:
         model_cls = A2C
     elif algo == "ppo":
@@ -70,10 +81,10 @@ def main():
     tb_dir = os.path.join("logs", "tensorboard", algo)
     os.makedirs(tb_dir, exist_ok=True)
 
-    # initialize model
+    # model initialization
     model = model_cls(
-        policy="MlpPolicy", 
-        env=vec_env,
+        policy="MlpPolicy",
+        env=train_env,
         verbose=1,
         gamma=config.get("discount_factor", 0.95),
         learning_rate=config.get("learning_rate", 5e-5),
@@ -83,23 +94,41 @@ def main():
         vf_coef=0.5,
     )
 
-    total_timesteps = 1e5
-    logging.info(f"Training {algo.upper()} for {total_timesteps} timesteps...")
-    model.learn(
-        total_timesteps=int(total_timesteps),
-        tb_log_name=algo
+    # early stopping callback: stop if no improvement after X evals
+    stop_callback = StopTrainingOnNoModelImprovement(
+        max_no_improvement_evals=5,  # stop if no improvement for 5 evaluations
+        min_evals=3,                  # require at least 3 evaluations before stopping
+        verbose=1
+    )
+    eval_callback = EvalCallback(
+        eval_env,
+        callback_on_new_best=stop_callback,
+        eval_freq=50_000,             # evaluate every 50k timesteps
+        best_model_save_path=os.path.join("models", algo, "best_model"),
+        n_eval_episodes=5,
+        verbose=1
     )
 
-    # save model
+    total_timesteps = 5e5
+    logging.info(f"Training {algo.upper()} for {total_timesteps} timesteps with early stopping...")
+    model.learn(
+        total_timesteps=int(total_timesteps),
+        tb_log_name=algo,
+        callback=eval_callback
+    )
+
+    # save final model
     save_path = os.path.join("models", algo)
     os.makedirs(save_path, exist_ok=True)
     model_file = os.path.join(save_path, f"{algo}_baseline")
     model.save(model_file)
     logging.info(f"Model saved to {model_file}.zip")
 
-    # close environments
-    vec_env.save(os.path.join(save_path, "vec_normalize.pkl"))
-    vec_env.close()
+    # save normalization stats
+    train_env.save(os.path.join(save_path, "vec_normalize.pkl"))
+    train_env.close()
+    eval_env.close()
+
 
 if __name__ == "__main__":
     main()
