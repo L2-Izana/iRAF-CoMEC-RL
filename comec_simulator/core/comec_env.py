@@ -85,7 +85,7 @@ class CoMECEnvironment:
         }
 
         
-    def allocate_resources(self, task_request: TaskRequest, alphas):
+    def allocate_resources(self, task_request: TaskRequest, alphas, is_ratio_absolute=True) -> dict[str, object] | None:
         """
         Compute resource reservation, latency, and energy for a given task.
         alphas: tuple of (alpha_B, alpha_u2e, alpha_e2ehat, alpha_e, alpha_ehat)
@@ -108,23 +108,46 @@ class CoMECEnvironment:
         md: MobileDevice = task_request.mobile_device
         
         # 1) bandwidth reservation
-        bw_req = alpha_B * bs.available_bandwidth
-        if not bs.allocate_bandwidth(bw_req):
-            print(f"Failed to allocate bandwidth for task {task.task_id}")
-            return None
+        if is_ratio_absolute:
+            bw_req = bs.total_bandwidth * alpha_B
+        else:
+            bw_req = alpha_B * bs.available_bandwidth
 
         # 2) CPU reservation
         primary, collab = self.edge_cluster.get_primary_collab_servers()
         
-        p_cpu = alpha_e * primary.available_cpu
-        c_cpu = alpha_ehat * collab.available_cpu
+        if is_ratio_absolute:
+            p_cpu = alpha_e * primary.cpu_capacity * alpha_e
+            c_cpu = alpha_ehat * collab.cpu_capacity * alpha_ehat if collab else 0
+        else:
+            p_cpu = alpha_e * primary.available_cpu
+            c_cpu = alpha_ehat * collab.available_cpu
+        
+        penalty_alloc = {
+            'task': task,
+            'bs': bs,
+            'primary': primary,
+            'collab': collab,
+            'bw_req': bw_req,
+            'p_cpu': p_cpu,
+            'c_cpu': c_cpu,
+            'total_latency': task.max_latency,  # Penalty latency
+            'total_energy': 1e2,
+        }
         
         if p_cpu <= 0 or not primary.allocate_cpu(p_cpu):
+            return penalty_alloc
             print(f"Failed to allocate CPU of primary edge server for task {task.task_id}")
             return None
         
         if c_cpu and collab and not collab.allocate_cpu(c_cpu):
+            return penalty_alloc
             print(f"Failed to allocate CPU of collab edge server for task {task.task_id}")
+            return None
+
+        if not bs.allocate_bandwidth(bw_req):
+            return penalty_alloc
+            print(f"Failed to allocate bandwidth for task {task.task_id}")
             return None
 
         # 3) compute latency + energy
@@ -134,16 +157,17 @@ class CoMECEnvironment:
         assert E_local >= 0, f"Local energy must be non-negative, not {E_local}"
 
         snr = max(md.transmit_power * task.channel_gain / CHANNEL_NOISE_VARIANCE, 1e-8)
-        rate = alpha_B * np.log2(1 + snr)
+        # rate = alpha_B * np.log2(1 + snr)
+        rate = bw_req * np.log2(1 + snr)
         assert rate > 0, f"Rate must be positive, not {rate}"
         t_tx = task.data_size * alpha_u2e / rate
         assert t_tx >= 0, f"Transmission time must be non-negative, not {t_tx}"
         E_tx = md.transmit_power * t_tx
         assert E_tx >= 0, f"Transmission energy must be non-negative, not {E_tx}"
         
-        if c_cpu == 0:
-            print(f"Zero CPU allocated to collaborative server for task {task.task_id}")
-            return None
+        # if c_cpu == 0:
+        #     print(f"Zero CPU allocated to collaborative server for task {task.task_id}")
+        #     return None
         t_edge = task.cpu_cycles * alpha_u2e * (1 - alpha_e2ehat) / p_cpu
         assert t_edge >= 0, f"Edge processing time must be non-negative, not {t_edge}"
         t_collab = (task.cpu_cycles * alpha_u2e * alpha_e2ehat / c_cpu) if collab else 0
@@ -162,7 +186,7 @@ class CoMECEnvironment:
             'bw_req': bw_req,
             'p_cpu': p_cpu,
             'c_cpu': c_cpu,
-            'total_latency': total_latency,
+            'total_latency': min(total_latency, task.max_latency),
             'total_energy': total_energy,
         }
     
@@ -190,7 +214,7 @@ class CoMECEnvironment:
         alloc = self.allocate_resources(task_request, alphas)
         if not alloc:
             raise RuntimeError(f"Failed to allocate resources for task {task_request.task.task_id}")
-
+            
         # schedule completion
         self._enqueue(self.time + alloc['total_latency'], self.handle_completion, alloc)
 

@@ -37,14 +37,13 @@ def main(cfg: DictConfig):
     sim = CoMECSimulator(
         iterations=cfg.num_iter,
         algorithm=cfg.algorithm,
-        optimize_for="latency",
+        optimize_for=cfg.optimize_for,
         num_edge_servers=cfg.num_es,
         num_clusters=cfg.num_clusters,
         cpu_capacity=cfg.cpu_capacity,
         num_devices_per_cluster=cfg.num_devices_per_cluster,
         cfg=cfg
     )
-    print_memory_usage("After creating simulator")
 
     if cfg.mode == "train":
         metrics = sim.run()

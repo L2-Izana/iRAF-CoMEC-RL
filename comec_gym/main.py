@@ -6,7 +6,7 @@ import yaml
 import gymnasium as gym
 import numpy as np
 import torch
-from stable_baselines3 import A2C, PPO
+from stable_baselines3 import A2C, PPO, SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecMonitor
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnNoModelImprovement
@@ -70,13 +70,22 @@ def main():
 
     # select algorithm
     algo = config.get("algorithm", "a2c").lower()
-    if algo in ["a2c", "a0c"]:
+    if algo == "a2c":
         model_cls = A2C
     elif algo == "ppo":
         model_cls = PPO
     else:
         raise ValueError(f"Unsupported algorithm: {algo}")
 
+        # SAC uses different default parameters
+    # kwargs = {"policy": "MlpPolicy", "env": train_env, "verbose": 0}
+    # if algo in ["a2c", "ppo"]:
+    #     kwargs.update({"gamma": 0.95, "learning_rate": 5e-5})
+    # elif algo == "sac":
+    #     kwargs.update({"learning_rate": 3e-4, "buffer_size": 100000, "learning_starts": 1000, "batch_size": 64, "tau": 0.005, "gamma": 0.99})
+
+    # model = model_cls(**kwargs)
+    
     # tensorboard log dir
     tb_dir = os.path.join("logs", "tensorboard", algo)
     os.makedirs(tb_dir, exist_ok=True)
@@ -86,7 +95,8 @@ def main():
         policy="MlpPolicy",
         env=train_env,
         verbose=1,
-        gamma=config.get("discount_factor", 0.95),
+        # gamma=config.get("discount_factor", 0.95),
+        gamma=0.1,
         learning_rate=config.get("learning_rate", 5e-5),
         tensorboard_log=tb_dir,
         max_grad_norm=0.5,
@@ -94,27 +104,12 @@ def main():
         vf_coef=0.5,
     )
 
-    # early stopping callback: stop if no improvement after X evals
-    stop_callback = StopTrainingOnNoModelImprovement(
-        max_no_improvement_evals=5,  # stop if no improvement for 5 evaluations
-        min_evals=3,                  # require at least 3 evaluations before stopping
-        verbose=1
-    )
-    eval_callback = EvalCallback(
-        eval_env,
-        callback_on_new_best=stop_callback,
-        eval_freq=50_000,             # evaluate every 50k timesteps
-        best_model_save_path=os.path.join("models", algo, "best_model"),
-        n_eval_episodes=5,
-        verbose=1
-    )
 
     total_timesteps = 5e5
     logging.info(f"Training {algo.upper()} for {total_timesteps} timesteps with early stopping...")
     model.learn(
         total_timesteps=int(total_timesteps),
         tb_log_name=algo,
-        callback=eval_callback
     )
 
     # save final model

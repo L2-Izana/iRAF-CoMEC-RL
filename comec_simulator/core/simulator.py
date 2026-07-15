@@ -90,27 +90,19 @@ class CoMECSimulator:
 
             arrival_time_sorted_trajectory = sorted(trajectory.items(), key=lambda x: x[1][0]['task'].arrival_time)
             for task_id, step in arrival_time_sorted_trajectory:
-                env_resources, alphas, metrics = step[0], step[1], step[2]
-                if len(step) != 3:
-                    print("Bullshit")
-                    exit(1)
+                env_resources, alphas, metrics = step[0], step[1], step[2]                
             average_metrics = self.metrics.get_average_metrics()
             trajectory_vector = [step[1] for step in arrival_time_sorted_trajectory] # To access the trajectory vector, [0] for task_id
             rewards = None
             if self.optimize_for == 'latency':
                 rewards = [trajectory_e[-1][0] for trajectory_e in trajectory_vector]
-                # print(f"Rewards: {rewards}")
-                # time.sleep(0.1)  # To avoid too fast printing
             elif self.optimize_for == 'energy':
                 rewards = [trajectory_e[-1][1] for trajectory_e in trajectory_vector]
             elif self.optimize_for == 'latency_energy':
                 rewards = [np.average(step[-1]) for step in trajectory_vector]
             else:
                 raise ValueError(f"Invalid optimize_for: {self.optimize_for}")
-            # reward = self._get_objective_value(average_metrics, optimize_for)
-            # avg_lat_eng_arr = [-np.average(step[1][-1]) for step in arrival_time_sorted_trajectory]
-            # assert reward > 0, f"Reward should be positive, got {reward}"
-            self.iraf_engine.backprop(-np.array(rewards)) # Make it negative to minimize the objective value
+            self.iraf_engine.backprop(-np.array(rewards)) 
             node_count = self.iraf_engine.get_node_count()
             
             # Record tree iteration step attributes

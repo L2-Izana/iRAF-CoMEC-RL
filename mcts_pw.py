@@ -154,7 +154,7 @@ class MCTS_PW(MCTS):
     
     def _get_progressive_widening_floor(self, node: Node) -> int:
         progressive_widening_floor = int(K_PW * (node.N ** ALPHA_PW))
-        return min(max(progressive_widening_floor, MIN_PW_FLOOR), 20)
+        return max(progressive_widening_floor, MIN_PW_FLOOR)
     
     def _get_beta_distribution(self, node: Node, a=2., b=0.5) -> List[float]:
         """

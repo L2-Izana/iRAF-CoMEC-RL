@@ -1,7 +1,6 @@
 from typing import List, Tuple
 
 import torch
-import torch.nn as nn
 
 import numpy as np
 from comec_simulator.core.constants import BINS_PER_SUBACTION_LIST, DNN_INPUT_DIM, EXPLORATION_BONUS
@@ -58,7 +57,7 @@ class MCTS:
         self.current_node.N += 1
         self.current_node.W += reward
         self.current_node.Q = self.current_node.W / self.current_node.N
-        action_sequence.reverse()   
+        action_sequence.reverse()
         action_sequence = np.array(action_sequence).reshape(-1, 5) 
 
     def best_child(self, node: Node) -> Node:
